@@ -38,11 +38,14 @@ class PathManager:
             base_path = Path(self.base_config.catalogue_path) / "lensingsurvey_catalogues"
             
             if cut_to_desi:
-                base_path = base_path / "cut_catalogues"
+                if survey.upper() == "SDSS":
+                    print("SDSS does not have catalogues cut to DESI, using full catalogue path.")
+                else:
+                    base_path = base_path / "cut_catalogues"
             
             survey_dirs = {
                 "DES": "desy3",
-                "KiDS": "kids",
+                "KIDS": "kids",
                 "HSCY1": "hsc", 
                 "HSCY3": "hscy3",
                 "SDSS": "sdss"
