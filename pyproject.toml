@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desi-lensing"
+version = "2.0.0"
+description = "DESI Galaxy-Galaxy Lensing Analysis Pipeline"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "DESI Lensing Team", email = "desi-lensing@desi.lbl.gov"}
+]
+keywords = ["cosmology", "lensing", "desi", "galaxy-surveys"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "astropy>=5.0.0",
+    "healpy>=1.15.0",
+    "configparser",
+    "tqdm",
+    "pyyaml",
+    "click>=8.0.0",
+    "dsigma",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "pre-commit",
+]
+plotting = [
+    "matplotlib>=3.5.0",
+    "seaborn",
+]
+analysis = [
+    "emcee",
+    "corner",
+    "camb",
+]
+
+[project.urls]
+Homepage = "https://github.com/desihub/desi-lensing"
+Documentation = "https://desi-lensing.readthedocs.io"
+Repository = "https://github.com/desihub/desi-lensing.git"
+Issues = "https://github.com/desihub/desi-lensing/issues"
+
+[project.scripts]
+desi-lensing = "desi_lensing.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["desi_lensing*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true 
