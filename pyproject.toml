@@ -1,10 +1,14 @@
+# pyproject.toml
+
 [build-system]
+# Specifies the build tools pip needs to run the installation.
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
+# Core metadata that defines your package.
 name = "desi-lensing"
-version = "2.0.0"
+version = "2.1.0" # Version bumped to reflect packaging fix
 description = "DESI Galaxy-Galaxy Lensing Analysis Pipeline"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -18,51 +22,27 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Topic :: Scientific/Engineering :: Astronomy",
 ]
+
+# Runtime dependencies needed for your code to run.
 dependencies = [
-    "numpy>=1.20.0",
-    "scipy>=1.7.0",
-    "astropy>=5.0.0",
-    "healpy>=1.15.0",
+    "numpy",
+    "scipy",
+    "astropy",
+    "healpy",
     "configparser",
     "tqdm",
     "pyyaml",
-    "click>=8.0.0",
+    "click",
     "dsigma",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=6.0",
-    "pytest-cov",
-    "black",
-    "flake8",
-    "mypy",
-    "pre-commit",
-]
-plotting = [
-    "matplotlib>=3.5.0",
-    "seaborn",
-]
-analysis = [
-    "emcee",
-    "corner",
-    "camb",
-]
-
-[project.urls]
-Homepage = "https://github.com/sheydenr/desi-lensing"
-Repository = "https://github.com/sheydenr/desi-lensing.git"
-Issues = "https://github.com/sheydenr/desi-lensing/issues"
-
 [project.scripts]
+# This creates the 'desi-lensing' command-line tool.
 desi-lensing = "desi_lensing.cli.main:main"
 
 [tool.setuptools.packages.find]
+# This section is CRITICAL. It tells the build system where to find
+# your actual Python source code to include in the package.
 where = ["."]
 include = ["desi_lensing*"]
