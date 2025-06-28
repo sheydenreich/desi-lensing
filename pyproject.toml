@@ -56,10 +56,9 @@ analysis = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/desihub/desi-lensing"
-Documentation = "https://desi-lensing.readthedocs.io"
-Repository = "https://github.com/desihub/desi-lensing.git"
-Issues = "https://github.com/desihub/desi-lensing/issues"
+Homepage = "https://github.com/sheydenr/desi-lensing"
+Repository = "https://github.com/sheydenr/desi-lensing.git"
+Issues = "https://github.com/sheydenr/desi-lensing/issues"
 
 [project.scripts]
 desi-lensing = "desi_lensing.cli.main:main"
@@ -67,13 +66,3 @@ desi-lensing = "desi_lensing.cli.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["desi_lensing*"]
-
-[tool.black]
-line-length = 100
-target-version = ['py38']
-
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true 
