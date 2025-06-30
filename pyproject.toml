@@ -41,8 +41,14 @@ dependencies = [
 # This creates the 'desi-lensing' command-line tool.
 desi-lensing = "desi_lensing.cli.main:main"
 
-[tool.setuptools.packages.find]
-# This section is CRITICAL. It tells the build system where to find
-# your actual Python source code to include in the package.
-where = ["."]
-include = ["desi_lensing*"]
+[tool.setuptools]
+# Explicitly list packages to avoid discovery issues in containerized environments.
+packages = [
+    "desi_lensing",
+    "desi_lensing.analysis",
+    "desi_lensing.cli",
+    "desi_lensing.config",
+    "desi_lensing.core",
+    "desi_lensing.data",
+    "desi_lensing.utils"
+]
