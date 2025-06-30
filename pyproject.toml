@@ -8,19 +8,19 @@ build-backend = "setuptools.build_meta"
 [project]
 # Core metadata that defines your package.
 name = "desi-lensing"
-version = "2.1.0" # Version bumped to reflect packaging fix
+version = "0.1.1" # Version bumped to reflect packaging fix
 description = "DESI Galaxy-Galaxy Lensing Analysis Pipeline"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "DESI Lensing Team", email = "desi-lensing@desi.lbl.gov"}
+    {name = "Sven Heydenreich", email = "sheydenr@ucsc.edu"}
 ]
 keywords = ["cosmology", "lensing", "desi", "galaxy-surveys"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU General Public",
     "Programming Language :: Python :: 3",
 ]
 
