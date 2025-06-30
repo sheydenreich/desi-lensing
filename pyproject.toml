@@ -12,7 +12,7 @@ version = "0.1.1" # Version bumped to reflect packaging fix
 description = "DESI Galaxy-Galaxy Lensing Analysis Pipeline"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT"}
+license = {text = "Gnu General Public"}
 authors = [
     {name = "Sven Heydenreich", email = "sheydenr@ucsc.edu"}
 ]
