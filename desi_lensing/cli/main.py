@@ -66,6 +66,8 @@ def add_common_options(func):
     func = click.option('--lrg-version', default='v1.5', help='LRG catalogue version')(func)
     func = click.option('--elg-version', default='v1.5', help='ELG catalogue version')(func)
     func = click.option('--randoms', default='1,2', help='Comma-separated random indices')(func)
+    func = click.option('--randoms-ratio', type=float, default=-1.0,
+                       help='Ratio of randoms to lenses. If >= 0, subsample randoms to this ratio * len(lenses)')(func)
     func = click.option('--magnitude-cuts/--no-magnitude-cuts', default=True, 
                        help='Apply magnitude cuts')(func)
     func = click.option('--mstar-complete', is_flag=True, help='Use stellar mass complete sample')(func)
@@ -117,8 +119,11 @@ def add_common_options(func):
                        default='/pscratch/sd/s/sven/lensing_measurements/',
                        help='Output directory')(func)
     func = click.option('--catalogue-path', type=click.Path(),
+                       default='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/desi_catalogues/',
+                       help='Catalogue base path for lens galaxies')(func)
+    func = click.option('--source-catalogue-path', type=click.Path(),
                        default='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/',
-                       help='Catalogue base path')(func)
+                       help='Catalogue base path for source galaxies')(func)
     func = click.option('--save-precomputed/--no-save-precomputed', default=True,
                        help='Save precomputed tables')(func)
     func = click.option('--apply-blinding/--no-blinding', default=True,
@@ -226,6 +231,7 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
             lrg_catalogue_version=kwargs['lrg_version'],
             elg_catalogue_version=kwargs['elg_version'],
             which_randoms=randoms,
+            randoms_ratio=kwargs['randoms_ratio'],
             magnitude_cuts=kwargs['magnitude_cuts'],
             mstar_complete=kwargs.get('mstar_complete', False),
             weight_type=kwargs.get('weight_type', 'WEIGHT'),
@@ -245,6 +251,7 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
     
     output_config = OutputConfig(
         catalogue_path=kwargs['catalogue_path'],
+        source_catalogue_path=kwargs['source_catalogue_path'],
         save_path=kwargs['output_dir'],
         save_precomputed=kwargs['save_precomputed'],
         apply_blinding=kwargs['apply_blinding'],

@@ -52,7 +52,7 @@ class RandomsAnalyzer:
         
         # Setup data loader
         from ..config.path_manager import PathManager
-        self.path_manager = PathManager(output_config)
+        self.path_manager = PathManager(output_config, source_config)
         self.data_loader = DataLoader(
             lens_config, source_config, output_config, self.path_manager, logger
         )

@@ -30,6 +30,7 @@ class LensGalaxyConfig(BaseConfig):
     
     # Random catalogues
     which_randoms: List[int] = field(default_factory=lambda: [1, 2])
+    randoms_ratio: float = -1.0  # If >= 0, subsample randoms to this ratio * len(lenses)
     
     # Magnitude cuts
     magnitude_cuts: bool = True
@@ -70,6 +71,10 @@ class LensGalaxyConfig(BaseConfig):
             errors.append("which_randoms cannot be empty")
         if any(r < 0 for r in self.which_randoms):
             errors.append("All random indices must be non-negative")
+        
+        # Validate randoms_ratio
+        if self.randoms_ratio == 0:
+            errors.append("randoms_ratio must be either negative (disabled) or positive")
         
         return errors
     

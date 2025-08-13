@@ -8,17 +8,31 @@ import os
 class PathManager:
     """Manages all file paths for the lensing pipeline."""
     
-    def __init__(self, base_config: "OutputConfig"):
-        """Initialize with output configuration."""
+    def __init__(self, base_config: "OutputConfig", source_config: Optional["SourceSurveyConfig"] = None):
+        """Initialize with output configuration and optionally source configuration."""
         self.base_config = base_config
+        self.source_config = source_config
         self._path_cache: Dict[str, Path] = {}
     
     def get_catalogue_path(self, version: str, survey: Optional[str] = None) -> Path:
         """Get path to catalogue files."""
         cache_key = f"catalogue_{version}_{survey}"
         if cache_key not in self._path_cache:
-            path = Path(self.base_config.catalogue_path) / "desi_catalogues" / version
-            if survey:
+            path = Path(self.base_config.catalogue_path) / version
+            if survey and self.source_config:
+                # Only append survey subdirectory if cut_to_desi is True
+                if self.source_config.cut_catalogues_to_desi:
+                    survey_mapping = {
+                        "DES": "desy3",
+                        "KIDS": "kids1000N", 
+                        "HSCY1": "hscy1",
+                        "HSCY3": "hscy3",
+                        "SDSS": "sdss"
+                    }
+                    survey_name = survey_mapping.get(survey.upper(), survey.lower())
+                    path = path / survey_name
+            elif survey and not self.source_config:
+                # Fallback to original behavior if source_config not provided
                 survey_mapping = {
                     "DES": "desy3",
                     "KIDS": "kids1000N", 
@@ -35,7 +49,7 @@ class PathManager:
         """Get path to source survey catalogues."""
         cache_key = f"source_{survey}_{cut_to_desi}"
         if cache_key not in self._path_cache:
-            base_path = Path(self.base_config.catalogue_path) / "lensingsurvey_catalogues"
+            base_path = Path(self.base_config.source_catalogue_path) / 'lensingsurvey_catalogues'
             
             if cut_to_desi:
                 if survey.upper() == "SDSS":
@@ -81,10 +95,11 @@ class PathManager:
         base_path = self.get_source_catalogue_path(survey, cut_to_desi)
         
         galaxy_suffix = ""
-        if galaxy_type in ["BGS_BRIGHT"]:
-            galaxy_suffix = "_BGS"
-        elif galaxy_type in ["LRG", "ELG"]:
-            galaxy_suffix = f"_{galaxy_type}"
+        if cut_to_desi:
+            if galaxy_type in ["BGS_BRIGHT"]:
+                galaxy_suffix = "_BGS"
+            elif galaxy_type in ["LRG", "ELG"]:
+                galaxy_suffix = f"_{galaxy_type}"
         
         file_patterns = {
             "DES": f"desy3_cat{galaxy_suffix}.fits",
@@ -103,20 +118,20 @@ class PathManager:
     def get_calibration_file(self, survey: str) -> Optional[Path]:
         """Get calibration file for survey if needed."""
         if survey.upper() == "HSCY1":
-            base_path = Path(self.base_config.catalogue_path) / "lensingsurvey_catalogues" / "hsc"
+            base_path = Path(self.base_config.source_catalogue_path) / "lensingsurvey_catalogues" / "hsc"
             return base_path / "hsc_cal.fits"
         elif survey.upper() == "SDSS":
-            base_path = Path(self.base_config.catalogue_path) / "lensingsurvey_catalogues" / "sdss"
+            base_path = Path(self.base_config.source_catalogue_path) / "lensingsurvey_catalogues" / "sdss"
             return base_path / "table_c_sdss.fits"
         return None
     
     def get_nofz_file(self, survey: str) -> Path:
         """Get n(z) file path for survey."""
-        base_path = Path(self.base_config.catalogue_path) / "model_inputs_desiy1"
+        base_path = Path(self.base_config.source_catalogue_path) / "model_inputs_desiy1"
         
         survey_mapping = {
             "DES": "desy3",
-            "KiDS": "kids1000",
+            "KIDS": "kids1000",
             "HSCY1": "hscy1",
             "HSCY3": "hscy3", 
             "SDSS": "sdss"
@@ -208,6 +223,7 @@ class PathManager:
         """Validate that required paths exist."""
         paths_to_check = {
             "catalogue_path": self.base_config.catalogue_path,
+            "source_catalogue_path": self.base_config.source_catalogue_path,
             "magnification_bias_path": self.base_config.magnification_bias_path,
         }
         

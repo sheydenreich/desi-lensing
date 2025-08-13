@@ -35,7 +35,7 @@ class LensingPipeline:
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         
         # Initialize path manager
-        self.path_manager = PathManager(output_config)
+        self.path_manager = PathManager(output_config, source_config)
         
         # Initialize data loader
         self.data_loader = DataLoader(
@@ -98,6 +98,11 @@ class LensingPipeline:
             self.logger.info(f"Processing source survey: {source_survey}")
             
             table_l, table_r = self.data_loader.load_lens_catalogues(source_survey)
+            
+            # Apply randoms subsampling if requested
+            if self.lens_config.randoms_ratio >= 0 and table_r is not None:
+                table_r = self._subsample_randoms(table_l, table_r, source_survey)
+            
             # Load source catalogue
             table_s, precompute_kwargs, stacking_kwargs = self.data_loader.load_source_catalogue(
                 source_survey, self.lens_config.galaxy_type
@@ -155,6 +160,35 @@ class LensingPipeline:
         except (KeyError, IndexError):
             self.logger.warning(f"Magnification bias not found for {galaxy_type} bin {lens_bin}, only found for {self.magnification_bias_data}")
             return None
+    
+    def _subsample_randoms(self, table_l, table_r, source_survey):
+        """Subsample randoms table to the specified ratio."""
+        n_lenses = len(table_l)
+        target_n_randoms = int(self.lens_config.randoms_ratio * n_lenses)
+        n_randoms = len(table_r)
+        
+        # Check if we have enough randoms
+        if n_randoms < target_n_randoms:
+            raise ValueError(
+                f"Insufficient randoms for survey {source_survey}: "
+                f"need {target_n_randoms} (ratio {self.lens_config.randoms_ratio} * {n_lenses} lenses), "
+                f"but only have {n_randoms} randoms"
+            )
+        
+        # Set random seed for reproducibility
+        np.random.seed(42)
+        
+        # Select random subset
+        indices = np.random.choice(n_randoms, size=target_n_randoms, replace=False)
+        table_r_subsampled = table_r[indices]
+        
+        self.logger.info(
+            f"Subsampled randoms for {source_survey}: "
+            f"{n_randoms} -> {target_n_randoms} "
+            f"(ratio {self.lens_config.randoms_ratio}, {n_lenses} lenses)"
+        )
+        
+        return table_r_subsampled
     
     def _process_tomographic(
         self, computation, table_l_part, table_r_part, table_s,

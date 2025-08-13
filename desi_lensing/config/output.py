@@ -18,7 +18,8 @@ class OutputConfig(BaseConfig):
     """Configuration for output settings."""
     
     # Base paths
-    catalogue_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/"
+    catalogue_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/desi_catalogues/"
+    source_catalogue_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/desi_catalogues/"
     save_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/lensing_measurements/"
     magnification_bias_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/magnification_bias_DESI/"
     
@@ -55,6 +56,7 @@ class OutputConfig(BaseConfig):
         # Check if paths exist (create warning, not error)
         paths_to_check = [
             ("catalogue_path", self.catalogue_path),
+            ("source_catalogue_path", self.source_catalogue_path),
             ("magnification_bias_path", self.magnification_bias_path),
         ]
         

@@ -75,6 +75,9 @@ def convert_config_file(input_path: Path, output_path: Path) -> None:
     output_data = {
         'catalogue_path': config.get('misc', 'catalogue_path', 
                                    fallback='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/'),
+        'source_catalogue_path': config.get('misc', 'source_catalogue_path', 
+                                           fallback=config.get('misc', 'catalogue_path', 
+                                                             fallback='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/')),
         'save_path': config.get('misc', 'savepath',
                               fallback='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/lensing_measurements/'),
         'magnification_bias_path': config.get('misc', 'magnification_bias_path',

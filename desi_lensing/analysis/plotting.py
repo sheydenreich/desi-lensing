@@ -62,7 +62,7 @@ class DataVectorPlotter:
         
         # Setup data loader for accessing results
         from ..config.path_manager import PathManager
-        self.path_manager = PathManager(output_config)
+        self.path_manager = PathManager(output_config, source_config)
         self.data_loader = DataLoader(
             lens_config, source_config, output_config, self.path_manager, logger
         )
@@ -1344,7 +1344,7 @@ class MultiGalaxyPlotter:
         
         # Setup data loader for accessing results
         from ..config.path_manager import PathManager
-        self.path_manager = PathManager(output_config)
+        self.path_manager = PathManager(output_config, source_config)
         
         # Common plotting parameters
         self.color_list = ['blue', 'red', 'green', 'orange', 'purple']
