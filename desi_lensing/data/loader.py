@@ -53,7 +53,7 @@ class DataLoader:
             return self._load_mstar_complete_lens_catalogues(galaxy_type, version, z_bins, randoms)
         
         # Regular loading
-        necessary_columns = ['RA', 'DEC', 'Z']
+        necessary_columns = ['RA', 'DEC', 'Z', 'TARGETID']
         columns_to_add = necessary_columns.copy()
         
         # Add systematic weights if needed
@@ -75,7 +75,7 @@ class DataLoader:
         
         # Convert to dsigma table
         table_l = dsigma_table(
-            table_l, 'lens', z='Z', ra='RA', dec='DEC', w_sys=self.lens_config.weight_type,
+            table_l, 'lens', z='Z', ra='RA', dec='DEC', w_sys=self.lens_config.weight_type,TARGETID='TARGETID',
             verbose=self.output_config.verbose
         )
         
