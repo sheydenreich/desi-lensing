@@ -13,7 +13,7 @@ from astropy.io import fits
 from astropy.table import Table, vstack, join
 
 from dsigma.helpers import dsigma_table
-from dsigma.surveys import des, kids, hsc
+from dsigma.surveys import des, kids, hsc, decade
 
 from ..config import LensGalaxyConfig, SourceSurveyConfig, OutputConfig, PathManager
 
@@ -107,8 +107,55 @@ class DataLoader:
             return self._load_hscy3_catalogue(galaxy_type, cut_to_desi, survey_settings)
         elif survey.upper() == "SDSS":
             return self._load_sdss_catalogue(galaxy_type, cut_to_desi, survey_settings)
+        elif survey.upper() == "DECADE_NGC":
+            return self._load_decade_catalogue(galaxy_type, cut_to_desi, "NGC", survey_settings)
+        elif survey.upper() == "DECADE_SGC":
+            return self._load_decade_catalogue(galaxy_type, cut_to_desi, "SGC", survey_settings)
         else:
             raise ValueError(f"Unsupported survey: {survey}")
+
+    def _load_decade_catalogue(self, galaxy_type: str, cut_to_desi: bool, ngcsgc: str, settings: Dict[str, bool]) -> Tuple[Table, Dict[str, Any], Dict[str, Any]]:
+        """Load DECADE DR1 catalogue."""
+        # Get file path
+
+        surveystr = f"DECADE_{ngcsgc}"
+        catalogue_path = self.path_manager.get_source_catalogue_file(surveystr, galaxy_type, cut_to_desi)
+        
+        self.logger.info(f"Reading {catalogue_path} from {self._get_last_mtime(catalogue_path)}")
+        table_s = Table.read(catalogue_path)
+        
+        for key in ['R_11', 'R_22', 'R_12', 'R_21']:
+            table_s[key] = 0.
+        # Apply shear response correction
+        for z_bin in range(4):
+            select = table_s['DNF_Z'] == z_bin
+            R_gamma,R_sel = decade.shear_response(table_s[select])
+            if self.output_config.verbose:
+                self.logger.info(f"Bin {z_bin + 1}: R_gamma = {100 * 0.5 * np.sum(np.diag(R_gamma)):.1f}% R_sel = {100 * 0.5 * np.sum(np.diag(R_sel)):.1f}%")
+                self.logger.info(f"N_gals: {np.sum(select)}")
+            for mcal_i in range(2):
+                for mcal_j in range(2):
+                    table_s[f'R_{mcal_i+1}{mcal_j+1}'][select] = R_gamma[mcal_i,mcal_j] + R_sel[mcal_i,mcal_j]
+
+        table_s = table_s[table_s['DNF_Z'] >= 0]
+
+        table_s = dsigma_table(
+            table_s, 'source',
+            e_2_convention='standard',
+            verbose=self.output_config.verbose,
+        )        
+        
+        # Add multiplicative bias
+        table_s['m'] = decade.multiplicative_shear_bias(table_s['z_bin'], gal_cap = ngcsgc)
+        
+        # Load n(z)
+        table_n = self._read_nofz(surveystr)
+        
+        precompute_kwargs = {'table_n': table_n}
+        stacking_kwargs = self._build_stacking_kwargs(settings)
+        
+        return table_s, precompute_kwargs, stacking_kwargs
+
     
     def _load_des_catalogue(self, galaxy_type: str, cut_to_desi: bool, settings: Dict[str, bool]) -> Tuple[Table, Dict[str, Any], Dict[str, Any]]:
         """Load DES Y3 catalogue."""

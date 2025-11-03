@@ -112,6 +112,7 @@ class ComputationConfig(BaseConfig):
     
     def get_cosmology(self) -> Cosmology:
         """Get the astropy cosmology object."""
+        print("H0", self.h0, "cosmology", self.cosmology)
         if self.cosmology == "planck18":
             return Planck18.clone(H0=self.h0)
         elif self.cosmology == "wmap9":

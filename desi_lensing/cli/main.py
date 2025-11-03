@@ -74,7 +74,7 @@ def add_common_options(func):
     
     # Source survey configuration
     func = click.option('--source-surveys', 
-                       default='DES,KiDS,HSCY1,HSCY3,SDSS',
+                       default='DECADE,DES,KiDS,HSCY3,SDSS',
                        help='Comma-separated list of source surveys')(func)
     func = click.option('--cut-to-desi/--no-cut-to-desi', default=True,
                        help='Cut source catalogues to DESI footprint')(func)

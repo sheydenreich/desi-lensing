@@ -27,7 +27,9 @@ class PathManager:
                         "KIDS": "kids1000N", 
                         "HSCY1": "hscy1",
                         "HSCY3": "hscy3",
-                        "SDSS": "sdss"
+                        "SDSS": "sdss",
+                        "DECADE_NGC": "decade_ngc",
+                        "DECADE_SGC": "decade_sgc"
                     }
                     survey_name = survey_mapping.get(survey.upper(), survey.lower())
                     path = path / survey_name
@@ -38,7 +40,9 @@ class PathManager:
                     "KIDS": "kids1000N", 
                     "HSCY1": "hscy1",
                     "HSCY3": "hscy3",
-                    "SDSS": "sdss"
+                    "SDSS": "sdss",
+                    "DECADE_NGC": "decade_ngc",
+                    "DECADE_SGC": "decade_sgc"
                 }
                 survey_name = survey_mapping.get(survey.upper(), survey.lower())
                 path = path / survey_name
@@ -62,7 +66,9 @@ class PathManager:
                 "KIDS": "kids",
                 "HSCY1": "hsc", 
                 "HSCY3": "hscy3",
-                "SDSS": "sdss"
+                "SDSS": "sdss",
+                "DECADE_NGC": "decade_ngc",
+                "DECADE_SGC": "decade_sgc"
             }
             
             survey_dir = survey_dirs.get(survey.upper(), survey.lower())
@@ -106,6 +112,8 @@ class PathManager:
             "KIDS": f"kids_cat{galaxy_suffix}.fits",
             "HSCY1": f"hsc_cat{galaxy_suffix}.fits",
             "HSCY3": f"hscy3_cat{galaxy_suffix}.fits", 
+            "DECADE_NGC": f"decade_ngc_cat{galaxy_suffix}.hdf5",
+            "DECADE_SGC": f"decade_sgc_cat{galaxy_suffix}.hdf5",
             "SDSS": "sdss_cat.fits"
         }
         
@@ -127,14 +135,16 @@ class PathManager:
     
     def get_nofz_file(self, survey: str) -> Path:
         """Get n(z) file path for survey."""
-        base_path = Path(self.base_config.source_catalogue_path) / "model_inputs_desiy1"
+        base_path = Path(self.base_config.source_catalogue_path) / "model_inputs_desiy3"
         
         survey_mapping = {
             "DES": "desy3",
             "KIDS": "kids1000",
             "HSCY1": "hscy1",
             "HSCY3": "hscy3", 
-            "SDSS": "sdss"
+            "SDSS": "sdss",
+            "DECADE_NGC": "decade_ngc",
+            "DECADE_SGC": "decade_sgc"
         }
         
         survey_name = survey_mapping.get(survey.upper(), survey.lower())
