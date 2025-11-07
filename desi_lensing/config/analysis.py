@@ -33,6 +33,18 @@ class AnalysisConfig(BaseConfig):
             "deltasigma": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0},
             "gammat": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0}
         },
+        "DECADE": {
+            "deltasigma": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0},
+            "gammat": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0}
+        },
+        "DECADE_NGC": {
+            "deltasigma": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0},
+            "gammat": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0}
+        },
+        "DECADE_SGC": {
+            "deltasigma": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0},
+            "gammat": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0}
+        },
         "HSCY1": {
             "deltasigma": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0},
             "gammat": {"min_deg": 0.0041666666666, "max_deg": 2.18, "rp_pivot": 1.0}
@@ -51,6 +63,18 @@ class AnalysisConfig(BaseConfig):
             "LRG_l0": [3, 4], "LRG_l1": [], "LRG_l2": []
         },
         "DES": {
+            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
+            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+        },
+        "DECADE": {
+            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
+            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+        },
+        "DECADE_NGC": {
+            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
+            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+        },
+        "DECADE_SGC": {
             "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
             "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
         },
@@ -75,6 +99,18 @@ class AnalysisConfig(BaseConfig):
             "LRG_l0": [3, 4], "LRG_l1": [], "LRG_l2": []
         },
         "DES": {
+            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
+            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+        },
+        "DECADE": {
+            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
+            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+        },
+        "DECADE_NGC": {
+            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
+            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+        },
+        "DECADE_SGC": {
             "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
             "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
         },

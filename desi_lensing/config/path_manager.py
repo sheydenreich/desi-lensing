@@ -226,7 +226,7 @@ class PathManager:
         return {
             "lens": lens_path,
             "random": random_path, 
-            "metadata": metadata_path
+            # "metadata": metadata_path
         }
     
     def validate_paths(self) -> Dict[str, bool]:

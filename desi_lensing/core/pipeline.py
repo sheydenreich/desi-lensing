@@ -1,12 +1,19 @@
 """Main lensing pipeline orchestrator."""
 
+# Fix OpenBLAS threading issues on HPC systems before importing numerical libraries
+import os
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "20")
+os.environ.setdefault("MKL_NUM_THREADS", "20")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "20")
+os.environ.setdefault("OMP_NUM_THREADS", "20")
+
 import json
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from copy import deepcopy
 
-from astropy.table import Table
+from astropy.table import Table, join,vstack
 import numpy as np
 
 from ..config import ComputationConfig, LensGalaxyConfig, SourceSurveyConfig, OutputConfig, PathManager
@@ -97,60 +104,170 @@ class LensingPipeline:
         for source_survey in self.source_config.surveys:
             self.logger.info(f"Processing source survey: {source_survey}")
             
-            table_l, table_r = self.data_loader.load_lens_catalogues(source_survey)
+            # Handle DECADE specially: process NGC and SGC separately then join
+            if source_survey.upper() == "DECADE":
+                self._process_decade_survey()
+                continue
             
-            # Apply randoms subsampling if requested
-            if self.lens_config.randoms_ratio >= 0 and table_r is not None:
-                table_r = self._subsample_randoms(table_l, table_r, source_survey)
-            
-            # Load source catalogue
-            table_s, precompute_kwargs, stacking_kwargs = self.data_loader.load_source_catalogue(
-                source_survey, self.lens_config.galaxy_type
-            )
-            
-            # Process each statistic
-            for statistic in self.computation_config.statistics:
-                self.logger.info(f"Computing statistic: {statistic}")
-                
-                # Process each lens redshift bin
-                for lens_bin in range(self.lens_config.get_n_lens_bins()):
-                    z_min = self.lens_config.z_bins[lens_bin]
-                    z_max = self.lens_config.z_bins[lens_bin + 1]
-                    
-                    # Select lenses in this redshift bin
-                    mask_l = ((z_min <= table_l['z']) & (table_l['z'] < z_max))
-                    table_l_part = table_l[mask_l]
-                    
-                    if table_r is not None:
-                        mask_r = ((z_min <= table_r['z']) & (table_r['z'] < z_max))
-                        table_r_part = table_r[mask_r]
-                    else:
-                        table_r_part = None
-                    
-                    self.logger.info(f"Lens bin {lens_bin+1}/{self.lens_config.get_n_lens_bins()}: "
-                                   f"z=[{z_min:.2f}, {z_max:.2f}), {len(table_l_part)} lenses")
-                    
-                    # Create computation object to compute final statistic
-                    computation = self._create_computation(statistic)
-                    
-                    
-                    # Get magnification bias for this bin
-                    alpha_l = self._get_magnification_bias(lens_bin)
-                    
-                    if self.computation_config.tomography:
-                        self._process_tomographic(
-                            computation, table_l_part, table_r_part, table_s,
-                            source_survey, statistic, lens_bin, z_min, z_max,
-                            precompute_kwargs, stacking_kwargs, alpha_l
-                        )
-                    else:
-                        self._process_non_tomographic(
-                            computation, table_l_part, table_r_part, table_s,
-                            source_survey, statistic, lens_bin, z_min, z_max,
-                            precompute_kwargs, stacking_kwargs, alpha_l
-                        )
+            # Regular survey processing
+            self._process_single_survey(source_survey)
         
         self.logger.info("DESI lensing pipeline completed")
+    
+    def _process_single_survey(self, source_survey: str) -> None:
+        """Process a single source survey through the full pipeline."""
+        # Load lens catalogues
+        table_l, table_r = self.data_loader.load_lens_catalogues(source_survey)
+        
+        # Apply randoms subsampling if requested
+        if self.lens_config.randoms_ratio >= 0 and table_r is not None:
+            table_r = self._subsample_randoms(table_l, table_r, source_survey)
+        
+        # Load source catalogue
+        table_s, precompute_kwargs, stacking_kwargs = self.data_loader.load_source_catalogue(
+            source_survey, self.lens_config.galaxy_type
+        )
+        
+        # Process statistics for this survey
+        self._process_survey_statistics(
+            source_survey, table_l, table_r, table_s, 
+            precompute_kwargs, stacking_kwargs
+        )
+    
+    def _process_survey_statistics(
+        self, source_survey: str, table_l: Table, table_r: Optional[Table], 
+        table_s: Table, precompute_kwargs: Dict[str, Any], 
+        stacking_kwargs: Dict[str, Any]
+    ) -> None:
+        """Process all statistics and lens bins for a given survey."""
+        # Process each statistic
+        for statistic in self.computation_config.statistics:
+            self.logger.info(f"Computing statistic: {statistic}")
+            
+            # Process each lens redshift bin
+            for lens_bin in range(self.lens_config.get_n_lens_bins()):
+                z_min = self.lens_config.z_bins[lens_bin]
+                z_max = self.lens_config.z_bins[lens_bin + 1]
+                
+                # Select lenses in this redshift bin
+                mask_l = ((z_min <= table_l['z']) & (table_l['z'] < z_max))
+                table_l_part = table_l[mask_l]
+                
+                if table_r is not None:
+                    mask_r = ((z_min <= table_r['z']) & (table_r['z'] < z_max))
+                    table_r_part = table_r[mask_r]
+                else:
+                    table_r_part = None
+                
+                self.logger.info(f"Lens bin {lens_bin+1}/{self.lens_config.get_n_lens_bins()}: "
+                               f"z=[{z_min:.2f}, {z_max:.2f}), {len(table_l_part)} lenses")
+                
+                # Create computation object to compute final statistic
+                computation = self._create_computation(statistic)
+                
+                # Get magnification bias for this bin
+                alpha_l = self._get_magnification_bias(lens_bin)
+                
+                if self.computation_config.tomography:
+                    self._process_tomographic(
+                        computation, table_l_part, table_r_part, table_s,
+                        source_survey, statistic, lens_bin, z_min, z_max,
+                        precompute_kwargs, stacking_kwargs, alpha_l
+                    )
+                else:
+                    self._process_non_tomographic(
+                        computation, table_l_part, table_r_part, table_s,
+                        source_survey, statistic, lens_bin, z_min, z_max,
+                        precompute_kwargs, stacking_kwargs, alpha_l
+                    )
+    
+    def _process_decade_survey(self) -> None:
+        """Process DECADE survey by computing NGC and SGC separately, then joining."""
+        self.logger.info("Processing DECADE survey (NGC + SGC)")
+        
+        if not self.computation_config.tomography:
+            self.logger.warning("Non-tomographic analysis not yet implemented for DECADE")
+            return
+        
+        # Check if we need to compute anything from scratch
+        # If any combination is missing, process both caps completely
+        need_computation = self._check_decade_needs_computation()
+        
+        if need_computation:
+            self.logger.info("Some DECADE precomputed tables are missing - computing NGC and SGC")
+            for cap in ["NGC", "SGC"]:
+                cap_survey = f"DECADE_{cap}"
+                self.logger.info(f"Processing {cap_survey}")
+                self._process_single_survey(cap_survey)
+        
+        # Now join precomputed tables and save combined results
+        for statistic in self.computation_config.statistics:
+            self.logger.info(f"Joining and saving DECADE results for {statistic}")
+            
+            for lens_bin in range(self.lens_config.get_n_lens_bins()):
+                z_min = self.lens_config.z_bins[lens_bin]
+                z_max = self.lens_config.z_bins[lens_bin + 1]
+                n_source_bins = self.source_config.get_n_tomographic_bins("DECADE")
+                
+                for source_bin in range(n_source_bins):
+                    self.logger.info(f"Lens bin {lens_bin+1}/{self.lens_config.get_n_lens_bins()}: "
+                                   f"z=[{z_min:.2f}, {z_max:.2f}), source bin {source_bin+1}/{n_source_bins}")
+                    
+                    # Try to load precomputed combined tables
+                    stacking_kwargs = {'boost_correction': False}  # Default
+                    result = self._try_load_precomputed(
+                        statistic, "DECADE", lens_bin, z_min, z_max, source_bin, stacking_kwargs
+                    )
+                    
+                    if result is None:
+                        # Join NGC and SGC precomputed tables
+                        result = self._join_decade_precomputed_tables(
+                            statistic, lens_bin, z_min, z_max, source_bin, stacking_kwargs
+                        )
+                    
+                    # Save combined DECADE result
+                    if result is not None:
+                        self._save_results(
+                            result, statistic, "DECADE", lens_bin, z_min, z_max,
+                            source_bin, stacking_kwargs.get('boost_correction', False)
+                        )
+                    else:
+                        self.logger.warning(f"Failed to process DECADE for {statistic}, "
+                                          f"lens bin {lens_bin}, source bin {source_bin}")
+    
+    def _check_decade_needs_computation(self) -> bool:
+        """Check if any DECADE precomputed tables are missing."""
+        version = self.lens_config.get_catalogue_version()
+        
+        for statistic in self.computation_config.statistics:
+            for lens_bin in range(self.lens_config.get_n_lens_bins()):
+                z_min = self.lens_config.z_bins[lens_bin]
+                z_max = self.lens_config.z_bins[lens_bin + 1]
+                n_source_bins = self.source_config.get_n_tomographic_bins("DECADE")
+                
+                for source_bin in range(n_source_bins):
+                    # Check if NGC and SGC precomputed tables exist
+                    for cap in ["NGC", "SGC"]:
+                        cap_survey = f"DECADE_{cap}"
+                        paths = self.path_manager.get_precomputed_files(
+                            statistic=statistic,
+                            galaxy_type=self.lens_config.galaxy_type,
+                            version=version,
+                            survey=cap_survey,
+                            z_min=z_min,
+                            z_max=z_max,
+                            lens_bin=source_bin,
+                            boost_correction=False,
+                            is_bmode=self.computation_config.bmodes
+                        )
+                        
+                        # If any file is missing, we need to compute
+                        if not all(p.exists() for p in [paths['lens'], paths['random']]):
+                            self.logger.info(f"Missing precomputed tables for {cap_survey}")
+                            return True
+        
+        self.logger.info("All DECADE_NGC and DECADE_SGC precomputed tables exist")
+        return False
     
     def _get_magnification_bias(self, lens_bin: int) -> Optional[float]:
         """Get magnification bias for a lens bin."""
@@ -371,6 +488,102 @@ class LensingPipeline:
                 return None
         else:
             self.logger.debug(f"Precomputed files not found for {statistic} lens bin {lens_bin}, source bin {source_bin}")
+            return None
+    
+    def _join_decade_precomputed_tables(
+        self, statistic, lens_bin, z_min, z_max, source_bin, stacking_kwargs
+    ):
+        """Join precomputed tables from DECADE_NGC and DECADE_SGC."""
+        self.logger.info("Joining DECADE_NGC and DECADE_SGC precomputed tables")
+        
+        version = self.lens_config.get_catalogue_version()
+        
+        # Load NGC precomputed tables
+        ngc_paths = self.path_manager.get_precomputed_files(
+            statistic=statistic,
+            galaxy_type=self.lens_config.galaxy_type,
+            version=version,
+            survey="DECADE_NGC",
+            z_min=z_min,
+            z_max=z_max,
+            lens_bin=source_bin,
+            boost_correction=stacking_kwargs.get('boost_correction', False),
+            is_bmode=self.computation_config.bmodes
+        )
+        
+        # Load SGC precomputed tables
+        sgc_paths = self.path_manager.get_precomputed_files(
+            statistic=statistic,
+            galaxy_type=self.lens_config.galaxy_type,
+            version=version,
+            survey="DECADE_SGC",
+            z_min=z_min,
+            z_max=z_max,
+            lens_bin=source_bin,
+            boost_correction=stacking_kwargs.get('boost_correction', False),
+            is_bmode=self.computation_config.bmodes
+        )
+        
+        # Check if both sets of files exist
+        if not (all(p.exists() for p in ngc_paths.values()) and all(p.exists() for p in sgc_paths.values())):
+            self.logger.error("DECADE NGC and/or SGC precomputed tables not found")
+            # info about files that are missing
+            for path in ngc_paths.values():
+                if not path.exists():
+                    self.logger.info(f"NGC precomputed table not found: {path}")
+            for path in sgc_paths.values():
+                if not path.exists():
+                    self.logger.info(f"SGC precomputed table not found: {path}")
+            return None
+        
+        try:
+            # Load NGC tables
+            table_l_ngc = Table.read(str(ngc_paths['lens']), format='hdf5')
+            table_r_ngc = None
+            if ngc_paths['random'].exists():
+                table_r_ngc = Table.read(str(ngc_paths['random']), format='hdf5')
+            
+            # Load SGC tables
+            table_l_sgc = Table.read(str(sgc_paths['lens']), format='hdf5')
+            table_r_sgc = None
+            if sgc_paths['random'].exists():
+                table_r_sgc = Table.read(str(sgc_paths['random']), format='hdf5')
+            
+            # Join tables using vstack
+            # Use metadata_conflicts='silent' and then manually restore NGC metadata
+            table_l_combined = vstack([table_l_ngc, table_l_sgc], metadata_conflicts='silent')
+            # Restore metadata from NGC table (they should be identical)
+            table_l_combined.meta = dict(table_l_ngc.meta)
+            
+            table_r_combined = None
+            if table_r_ngc is not None and table_r_sgc is not None:
+                table_r_combined = vstack([table_r_ngc, table_r_sgc], metadata_conflicts='silent')
+                # Restore metadata from NGC table
+                table_r_combined.meta = dict(table_r_ngc.meta)
+            
+            self.logger.info(f"Successfully joined DECADE tables: {len(table_l_ngc)} NGC + {len(table_l_sgc)} SGC = {len(table_l_combined)} total lenses")
+            
+            # Save combined tables with DECADE survey name
+            # Do not save precomputed tables for DECADE as they are easy to recreate
+            # if self.output_config.save_precomputed:
+            #     self._save_precomputed_tables(
+            #         table_l_combined, table_r_combined,
+            #         statistic, "DECADE", lens_bin, z_min, z_max, source_bin, stacking_kwargs
+            #     )
+            
+            # Compute final statistic from combined tables
+            computation = self._create_computation(statistic)
+            alpha_l = self._get_magnification_bias(lens_bin)
+            
+            result, covariance_matrix = computation.compute_statistic(
+                table_l_combined, table_r_combined, alpha_l=alpha_l, **stacking_kwargs
+            )
+            
+            self.logger.info("Successfully computed from joined DECADE precomputed tables")
+            return result, covariance_matrix
+            
+        except Exception as e:
+            self.logger.error(f"Failed to join DECADE precomputed tables: {e}")
             return None
     
     def _compute_lensing_signal(

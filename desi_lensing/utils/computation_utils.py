@@ -116,11 +116,14 @@ def blind_dv(
     
     if random_seed_source_survey_dict is None:
         random_seed_source_survey_dict = {
-            "des": 46841,
+            "des": 98765,
             "hscy1": 98765,
-            "kids": 79237,
-            "sdss": 987132,
-            "hscy3": 98765
+            "kids": 98765,
+            "sdss": 98765,
+            "hscy3": 98765,
+            "decade": 98765,
+            "decade_ngc": 98765,
+            "decade_sgc": 98765,
         }
     
     random_seed = (random_seed_galtype_dict[galaxy_type] + 

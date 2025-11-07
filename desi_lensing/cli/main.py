@@ -1,5 +1,13 @@
 """Main command-line interface for DESI lensing pipeline."""
 
+# Fix OpenBLAS threading issues on HPC systems before importing numerical libraries
+# This prevents "Program is Terminated. Because you tried to allocate too many memory regions"
+import os
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "20")
+os.environ.setdefault("MKL_NUM_THREADS", "20")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "20")
+os.environ.setdefault("OMP_NUM_THREADS", "20")
+
 import click
 import sys
 import logging
@@ -75,7 +83,7 @@ def add_common_options(func):
     # Source survey configuration
     func = click.option('--source-surveys', 
                        default='DECADE,DES,KiDS,HSCY3,SDSS',
-                       help='Comma-separated list of source surveys')(func)
+                       help='Comma-separated list of source surveys (DES, KiDS, HSCY1, HSCY3, SDSS, DECADE, DECADE_NGC, DECADE_SGC)')(func)
     func = click.option('--cut-to-desi/--no-cut-to-desi', default=True,
                        help='Cut source catalogues to DESI footprint')(func)
     
@@ -680,11 +688,16 @@ def show_defaults(galaxy_type):
 @cli.command()
 def list_surveys():
     """List available source surveys."""
-    surveys = ["DES", "KiDS", "HSCY1", "HSCY3", "SDSS"]
+    surveys = ["DES", "KiDS", "HSCY1", "HSCY3", "SDSS", "DECADE", "DECADE_NGC", "DECADE_SGC"]
     click.echo("Available Source Surveys:")
-    click.echo("=" * 25)
+    click.echo("=" * 40)
     for survey in surveys:
-        click.echo(f"  {survey}")
+        if survey == "DECADE":
+            click.echo(f"  {survey} (combines NGC + SGC)")
+        elif survey in ["DECADE_NGC", "DECADE_SGC"]:
+            click.echo(f"  {survey}")
+        else:
+            click.echo(f"  {survey}")
 
 
 @randoms.command()

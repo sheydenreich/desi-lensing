@@ -80,15 +80,6 @@ class ConfigValidator:
         if not os.path.exists(self.output.catalogue_path):
             errors.append(f"Catalogue path does not exist: {self.output.catalogue_path}")
         
-        if not os.path.exists(self.output.magnification_bias_path):
-            errors.append(f"Magnification bias path does not exist: {self.output.magnification_bias_path}")
-        
-        # Check lens galaxy version compatibility
-        version = self.lens_galaxy.get_catalogue_version()
-        mag_bias_file = self.output.get_magnification_bias_file(version)
-        if not mag_bias_file.exists():
-            errors.append(f"Magnification bias file not found: {mag_bias_file}")
-        
         # Check that we have enough randoms for boost correction
         if any(self.source_survey.get_survey_settings(s).get("boost_correction", False) 
                for s in self.source_survey.surveys):
@@ -147,5 +138,14 @@ class ConfigValidator:
         if not self.lens_galaxy.z_bins == self.lens_galaxy.get_default_z_bins():
             warnings.append("Using non-standard redshift bins - this may not be what you want")
 
+        # Check magnification bias file paths
+        if not os.path.exists(self.output.magnification_bias_path):
+            warnings.append(f"Magnification bias path does not exist: {self.output.magnification_bias_path}. Will proceed without magnification bias correction.")
+        else:
+            # Check lens galaxy version compatibility
+            version = self.lens_galaxy.get_catalogue_version()
+            mag_bias_file = self.output.get_magnification_bias_file(version)
+            if not mag_bias_file.exists():
+                warnings.append(f"Magnification bias file not found: {mag_bias_file}. Will proceed without magnification bias correction.")
         
         return warnings 

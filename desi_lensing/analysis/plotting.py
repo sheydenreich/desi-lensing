@@ -426,6 +426,7 @@ class DataVectorPlotter:
                 # Plot each allowed tomographic bin
                 for source_bin in allowed_source_bins:
                     if source_bin >= n_tomo_bins:
+                        self.logger.error(f"Source bin {source_bin} doesn't exist for {source_survey}")
                         continue  # Skip if source bin doesn't exist for this survey
                     
                     results = self._load_lensing_results(
@@ -433,6 +434,7 @@ class DataVectorPlotter:
                     )
                     
                     if results is None:
+                        self.logger.warning(f"No results found for {lens_bin}, {source_survey}, {source_bin}")
                         continue
                     
                     # Extract data

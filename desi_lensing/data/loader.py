@@ -107,6 +107,10 @@ class DataLoader:
             return self._load_hscy3_catalogue(galaxy_type, cut_to_desi, survey_settings)
         elif survey.upper() == "SDSS":
             return self._load_sdss_catalogue(galaxy_type, cut_to_desi, survey_settings)
+        elif survey.upper() == "DECADE":
+            # DECADE should be handled at pipeline level by processing NGC and SGC separately
+            raise ValueError("DECADE survey should not be loaded directly. Use DECADE_NGC or DECADE_SGC, "
+                           "or let the pipeline handle DECADE automatically.")
         elif survey.upper() == "DECADE_NGC":
             return self._load_decade_catalogue(galaxy_type, cut_to_desi, "NGC", survey_settings)
         elif survey.upper() == "DECADE_SGC":
@@ -128,8 +132,8 @@ class DataLoader:
             table_s[key] = 0.
         # Apply shear response correction
         for z_bin in range(4):
-            select = table_s['DNF_Z'] == z_bin
-            R_gamma,R_sel = decade.shear_response(table_s[select])
+            R_gamma,R_sel = decade.shear_response(table_s,z_bin)
+            select = table_s['MCAL_SEL_NOSHEAR'] == z_bin + 1
             if self.output_config.verbose:
                 self.logger.info(f"Bin {z_bin + 1}: R_gamma = {100 * 0.5 * np.sum(np.diag(R_gamma)):.1f}% R_sel = {100 * 0.5 * np.sum(np.diag(R_sel)):.1f}%")
                 self.logger.info(f"N_gals: {np.sum(select)}")
@@ -138,12 +142,26 @@ class DataLoader:
                     table_s[f'R_{mcal_i+1}{mcal_j+1}'][select] = R_gamma[mcal_i,mcal_j] + R_sel[mcal_i,mcal_j]
 
         table_s = table_s[table_s['DNF_Z'] >= 0]
+        column_keys = {
+            'ra': 'RA',
+            'dec': 'Dec',
+            'z': 'DNF_Z',
+            'e_1': 'MCAL_G_1_NOSHEAR',
+            'e_2': 'MCAL_G_2_NOSHEAR',
+            'w': 'MCAL_W_NOSHEAR',
+            'R_11': 'R_11',
+            'R_12': 'R_12',
+            'R_21': 'R_21',
+            'R_22': 'R_22',
+            'z_bin': 'MCAL_SEL_NOSHEAR'}
 
         table_s = dsigma_table(
             table_s, 'source',
             e_2_convention='standard',
             verbose=self.output_config.verbose,
-        )        
+            **column_keys
+        )
+        table_s['z_bin'] = table_s['z_bin'] - 1
         
         # Add multiplicative bias
         table_s['m'] = decade.multiplicative_shear_bias(table_s['z_bin'], gal_cap = ngcsgc)

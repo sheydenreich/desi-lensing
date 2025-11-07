@@ -27,6 +27,10 @@ class OutputConfig(BaseConfig):
     filename_template: str = "{statistic}_{galaxy_type}_zmin_{z_min}_zmax_{z_max}_blind{blind}_boost_{boost}"
     filename_template_tomo: str = "{statistic}_{galaxy_type}_zmin_{z_min}_zmax_{z_max}_sbin_{source_bin}_blind{blind}_boost_{boost}"
     
+    # Precomputed table naming patterns (without blind/boost since these are applied later)
+    precomputed_filename_template: str = "{statistic}_{galaxy_type}_zmin_{z_min}_zmax_{z_max}"
+    precomputed_filename_template_tomo: str = "{statistic}_{galaxy_type}_zmin_{z_min}_zmax_{z_max}_sbin_{source_bin}"
+    
     # Output options
     verbose: bool = True
     save_precomputed: bool = True
@@ -82,6 +86,17 @@ class OutputConfig(BaseConfig):
         missing_tomo = required_tomo_placeholders - tomo_placeholders
         if missing_tomo:
             errors.append(f"filename_template_tomo missing required placeholders: {missing_tomo}")
+        
+        # Validate precomputed templates (same requirements as regular templates, but without blind/boost)
+        precomp_placeholders = set(re.findall(r'\{[^}]+\}', self.precomputed_filename_template))
+        missing_precomp = required_placeholders - precomp_placeholders
+        if missing_precomp:
+            errors.append(f"precomputed_filename_template missing required placeholders: {missing_precomp}")
+        
+        precomp_tomo_placeholders = set(re.findall(r'\{[^}]+\}', self.precomputed_filename_template_tomo))
+        missing_precomp_tomo = required_tomo_placeholders - precomp_tomo_placeholders
+        if missing_precomp_tomo:
+            errors.append(f"precomputed_filename_template_tomo missing required placeholders: {missing_precomp_tomo}")
         
         return errors
     
@@ -174,17 +189,31 @@ class OutputConfig(BaseConfig):
             effective_statistic = f"bmodes_{statistic}"
         
         # Generate base filename using templates
-        template = self.filename_template_tomo if source_bin is not None else self.filename_template
+        # Select appropriate template based on file type
+        if file_type.startswith("precomputed"):
+            template = self.precomputed_filename_template_tomo if source_bin is not None else self.precomputed_filename_template
+        else:
+            template = self.filename_template_tomo if source_bin is not None else self.filename_template
         
-        filename = template.format(
-            statistic=effective_statistic,
-            galaxy_type=galaxy_type,
-            z_min=z_min,
-            z_max=z_max,
-            source_bin=source_bin if source_bin is not None else "",
-            blind=self.blinding_label if apply_blinding else "unblind",
-            boost=boost_correction
-        )
+        # Format filename with appropriate parameters
+        if file_type.startswith("precomputed"):
+            filename = template.format(
+                statistic=effective_statistic,
+                galaxy_type=galaxy_type,
+                z_min=z_min,
+                z_max=z_max,
+                source_bin=source_bin if source_bin is not None else ""
+            )
+        else:
+            filename = template.format(
+                statistic=effective_statistic,
+                galaxy_type=galaxy_type,
+                z_min=z_min,
+                z_max=z_max,
+                source_bin=source_bin if source_bin is not None else "",
+                blind=self.blinding_label if apply_blinding else "unblind",
+                boost=boost_correction
+            )
         
         # Clean up any double underscores from empty source_bin
         filename = filename.replace("__", "_").rstrip("_")
@@ -274,7 +303,7 @@ class OutputConfig(BaseConfig):
         split_by: Optional[str] = None,
         split: Optional[int] = None,
         n_splits: int = 4,
-        extension: str = ".dat"
+        extension: str = None
     ) -> Path:
         """
         Get the filepath for a measurement file using consistent naming.
@@ -390,7 +419,7 @@ class OutputConfig(BaseConfig):
             )
             
             if filepath.exists():
-                return Table.read(str(filepath), format='ascii')
+                return Table.read(str(filepath))
             else:
                 self.logger.warning(f"Results file not found: {filepath}")
                 return None

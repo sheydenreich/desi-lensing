@@ -11,8 +11,8 @@ class SourceSurveyConfig(BaseConfig):
     """Configuration for source surveys."""
     
     # Which surveys to use
-    surveys: List[Literal["DES", "KiDS", "HSCY1", "HSCY3", "SDSS"]] = field(
-        default_factory=lambda: ["DES", "KiDS", "HSCY1", "HSCY3"]
+    surveys: List[Literal["DES", "KiDS", "HSCY1", "HSCY3", "SDSS", "DECADE", "DECADE_NGC", "DECADE_SGC"]] = field(
+        default_factory=lambda: ["DES", "KiDS", "HSCY1", "HSCY3", "DECADE"]
     )
     
     # Cut catalogues to DESI footprint
@@ -78,12 +78,23 @@ class SourceSurveyConfig(BaseConfig):
     sdss_mbias: float = -0.04  # 0.96 - 1
     sdss_r: float = 0.87
     
+    # DECADE settings
+    decade_photo_z_dilution_correction: bool = False
+    decade_boost_correction: bool = False
+    decade_scalar_shear_response_correction: bool = True
+    decade_matrix_shear_response_correction: bool = True
+    decade_shear_responsivity_correction: bool = False
+    decade_hsc_selection_bias_correction: bool = False
+    decade_hsc_additive_shear_bias_correction: bool = False
+    decade_hsc_y3_selection_bias_correction: bool = False
+    decade_random_subtraction: bool = True
+    
     def validate(self) -> List[str]:
         """Validate source survey configuration."""
         errors = []
         
         # Validate surveys
-        valid_surveys = {"DES", "KiDS", "HSCY1", "HSCY3", "SDSS"}
+        valid_surveys = {"DES", "KiDS", "HSCY1", "HSCY3", "SDSS", "DECADE", "DECADE_NGC", "DECADE_SGC"}
         for survey in self.surveys:
             if survey not in valid_surveys:
                 errors.append(f"Invalid survey '{survey}'. Must be one of {valid_surveys}")
@@ -104,6 +115,10 @@ class SourceSurveyConfig(BaseConfig):
         """Get correction settings for a specific survey."""
         survey_lower = survey.lower()
         
+        # Handle DECADE_NGC and DECADE_SGC by using DECADE settings
+        if survey_lower in ["decade_ngc", "decade_sgc"]:
+            survey_lower = "decade"
+        
         settings = {}
         for attr_name in dir(self):
             if attr_name.startswith(f"{survey_lower}_") and not attr_name.startswith("_"):
@@ -121,6 +136,9 @@ class SourceSurveyConfig(BaseConfig):
             "HSCY3": 4,
             "DES": 4,
             "KIDS": 5,
+            "DECADE": 4,
+            "DECADE_NGC": 4,
+            "DECADE_SGC": 4,
         }
         return n_tomo_bins.get(survey.upper(), 1)
     
@@ -132,6 +150,9 @@ class SourceSurveyConfig(BaseConfig):
             "HSCY3": "hscy3",
             "DES": "desy3",
             "KiDS": "kids1000N",
+            "DECADE": "decade",
+            "DECADE_NGC": "decade_ngc",
+            "DECADE_SGC": "decade_sgc",
         }
         return mapping.get(survey.upper(), survey.lower())
     
@@ -196,7 +217,22 @@ class SourceSurveyConfig(BaseConfig):
                 "hsc_y3_selection_bias_correction": False,
                 "random_subtraction": True,
             },
+            "decade": {
+                "photo_z_dilution_correction": False,
+                "boost_correction": False,
+                "scalar_shear_response_correction": True,
+                "matrix_shear_response_correction": True,
+                "shear_responsivity_correction": False,
+                "hsc_selection_bias_correction": False,
+                "hsc_additive_shear_bias_correction": False,
+                "hsc_y3_selection_bias_correction": False,
+                "random_subtraction": True,
+            },
         }
+        
+        # Handle DECADE_NGC and DECADE_SGC by using DECADE defaults
+        if survey_lower in ["decade_ngc", "decade_sgc"]:
+            survey_lower = "decade"
         
         if survey_lower in defaults:
             for setting, value in defaults[survey_lower].items():
