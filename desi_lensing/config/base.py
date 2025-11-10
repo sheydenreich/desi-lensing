@@ -62,4 +62,76 @@ class BaseConfig(ABC):
     
     def is_valid(self) -> bool:
         """Check if configuration is valid."""
-        return len(self.validate()) == 0 
+        return len(self.validate()) == 0
+    
+    def show_config(self, indent: int = 0) -> str:
+        """
+        Return a formatted string representation of the configuration.
+        
+        Parameters
+        ----------
+        indent : int
+            Number of spaces to indent output
+            
+        Returns
+        -------
+        str
+            Formatted configuration string
+        """
+        lines = []
+        prefix = " " * indent
+        class_name = self.__class__.__name__
+        lines.append(f"{prefix}{class_name}:")
+        
+        for key, value in self.__dict__.items():
+            if key.startswith('_'):
+                continue
+            if isinstance(value, BaseConfig):
+                # Recursively show nested config
+                lines.append(f"{prefix}  {key}:")
+                lines.append(value.show_config(indent + 4))
+            elif isinstance(value, list) and value and isinstance(value[0], BaseConfig):
+                # List of configs
+                lines.append(f"{prefix}  {key}:")
+                for i, item in enumerate(value):
+                    lines.append(f"{prefix}    [{i}]:")
+                    lines.append(item.show_config(indent + 6))
+            else:
+                # Simple value
+                lines.append(f"{prefix}  {key}: {value}")
+        
+        return "\n".join(lines)
+    
+    def print_config(self) -> None:
+        """Print the configuration to stdout."""
+        print(self.show_config())
+    
+    @classmethod
+    def from_preset(cls, preset: str) -> "BaseConfig":
+        """
+        Create configuration from a named preset.
+        
+        This method should be overridden by subclasses to provide
+        specific presets. Base implementation raises NotImplementedError.
+        
+        Parameters
+        ----------
+        preset : str
+            Name of the preset configuration
+            
+        Returns
+        -------
+        BaseConfig
+            Configuration instance with preset values
+            
+        Raises
+        ------
+        NotImplementedError
+            If the subclass doesn't implement presets
+        ValueError
+            If the preset name is not recognized
+        """
+        raise NotImplementedError(
+            f"{cls.__name__} does not implement presets. "
+            f"Override from_preset() to add preset support."
+        ) 

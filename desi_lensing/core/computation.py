@@ -176,6 +176,8 @@ class LensingComputation(BaseComputation):
         else:
             raise ValueError(f"Unknown statistic: {self.statistic_name}")
         
+        self.logger.info(kwargs)
+        self.logger.info(result['ds'])
         # Compute covariance matrix
         stacking_kwargs['return_table'] = False
         try:

@@ -199,6 +199,10 @@ class LensingPipeline:
                 cap_survey = f"DECADE_{cap}"
                 self.logger.info(f"Processing {cap_survey}")
                 self._process_single_survey(cap_survey)
+
+        survey_settings = self.source_config.get_survey_settings("DECADE")
+        stacking_kwargs = self.data_loader._build_stacking_kwargs(survey_settings)
+
         
         # Now join precomputed tables and save combined results
         for statistic in self.computation_config.statistics:
@@ -214,7 +218,6 @@ class LensingPipeline:
                                    f"z=[{z_min:.2f}, {z_max:.2f}), source bin {source_bin+1}/{n_source_bins}")
                     
                     # Try to load precomputed combined tables
-                    stacking_kwargs = {'boost_correction': False}  # Default
                     result = self._try_load_precomputed(
                         statistic, "DECADE", lens_bin, z_min, z_max, source_bin, stacking_kwargs
                     )
@@ -565,11 +568,11 @@ class LensingPipeline:
             
             # Save combined tables with DECADE survey name
             # Do not save precomputed tables for DECADE as they are easy to recreate
-            # if self.output_config.save_precomputed:
-            #     self._save_precomputed_tables(
-            #         table_l_combined, table_r_combined,
-            #         statistic, "DECADE", lens_bin, z_min, z_max, source_bin, stacking_kwargs
-            #     )
+            if self.output_config.save_precomputed:
+                self._save_precomputed_tables(
+                    table_l_combined, table_r_combined,
+                    statistic, "DECADE", lens_bin, z_min, z_max, source_bin, stacking_kwargs
+                )
             
             # Compute final statistic from combined tables
             computation = self._create_computation(statistic)

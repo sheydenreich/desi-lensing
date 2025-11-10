@@ -257,6 +257,209 @@ class OutputConfig(BaseConfig):
         
         return base_dir / filename
 
+    def get_measurement_path_simple(
+        self,
+        statistic: str,
+        galaxy_type: str,
+        version: str,
+        survey: str,
+        z_min: float,
+        z_max: float,
+        source_bin: Optional[int] = None,
+        is_bmode: bool = False
+    ) -> Path:
+        """
+        Get filepath for a measurement file (simplified API).
+        
+        This is a user-friendly wrapper around get_filepath() with only the
+        most commonly needed parameters for measurements.
+        
+        Parameters
+        ----------
+        statistic : str
+            Statistic type ('deltasigma', 'gammat')
+        galaxy_type : str
+            Type of lens galaxies
+        version : str
+            Catalogue version
+        survey : str
+            Source survey name
+        z_min : float
+            Minimum redshift for lens bin
+        z_max : float
+            Maximum redshift for lens bin
+        source_bin : Optional[int]
+            Source bin index for tomographic analysis
+        is_bmode : bool
+            Whether this is B-mode analysis
+            
+        Returns
+        -------
+        Path
+            Complete filepath for measurement
+        """
+        return self.get_filepath(
+            statistic=statistic,
+            galaxy_type=galaxy_type,
+            version=version,
+            survey=survey,
+            z_min=z_min,
+            z_max=z_max,
+            file_type="measurement",
+            source_bin=source_bin,
+            is_bmode=is_bmode
+        )
+    
+    def get_covariance_path_simple(
+        self,
+        statistic: str,
+        galaxy_type: str,
+        version: str,
+        survey: str,
+        z_min: float,
+        z_max: float,
+        source_bin: Optional[int] = None,
+        is_bmode: bool = False
+    ) -> Path:
+        """
+        Get filepath for a covariance matrix file (simplified API).
+        
+        Parameters
+        ----------
+        statistic : str
+            Statistic type ('deltasigma', 'gammat')
+        galaxy_type : str
+            Type of lens galaxies
+        version : str
+            Catalogue version
+        survey : str
+            Source survey name
+        z_min : float
+            Minimum redshift for lens bin
+        z_max : float
+            Maximum redshift for lens bin
+        source_bin : Optional[int]
+            Source bin index for tomographic analysis
+        is_bmode : bool
+            Whether this is B-mode analysis
+            
+        Returns
+        -------
+        Path
+            Complete filepath for covariance matrix
+        """
+        return self.get_filepath(
+            statistic=statistic,
+            galaxy_type=galaxy_type,
+            version=version,
+            survey=survey,
+            z_min=z_min,
+            z_max=z_max,
+            file_type="covariance",
+            source_bin=source_bin,
+            is_bmode=is_bmode
+        )
+    
+    def get_precomputed_lens_path(
+        self,
+        statistic: str,
+        galaxy_type: str,
+        version: str,
+        survey: str,
+        z_min: float,
+        z_max: float,
+        source_bin: Optional[int] = None,
+        is_bmode: bool = False
+    ) -> Path:
+        """
+        Get filepath for precomputed lens table (simplified API).
+        
+        Parameters
+        ----------
+        statistic : str
+            Statistic type ('deltasigma', 'gammat')
+        galaxy_type : str
+            Type of lens galaxies
+        version : str
+            Catalogue version
+        survey : str
+            Source survey name
+        z_min : float
+            Minimum redshift for lens bin
+        z_max : float
+            Maximum redshift for lens bin
+        source_bin : Optional[int]
+            Source bin index for tomographic analysis
+        is_bmode : bool
+            Whether this is B-mode analysis
+            
+        Returns
+        -------
+        Path
+            Complete filepath for precomputed lens table
+        """
+        return self.get_filepath(
+            statistic=statistic,
+            galaxy_type=galaxy_type,
+            version=version,
+            survey=survey,
+            z_min=z_min,
+            z_max=z_max,
+            file_type="precomputed_lens",
+            source_bin=source_bin,
+            is_bmode=is_bmode
+        )
+    
+    def get_precomputed_random_path(
+        self,
+        statistic: str,
+        galaxy_type: str,
+        version: str,
+        survey: str,
+        z_min: float,
+        z_max: float,
+        source_bin: Optional[int] = None,
+        is_bmode: bool = False
+    ) -> Path:
+        """
+        Get filepath for precomputed random table (simplified API).
+        
+        Parameters
+        ----------
+        statistic : str
+            Statistic type ('deltasigma', 'gammat')
+        galaxy_type : str
+            Type of lens galaxies
+        version : str
+            Catalogue version
+        survey : str
+            Source survey name
+        z_min : float
+            Minimum redshift for lens bin
+        z_max : float
+            Maximum redshift for lens bin
+        source_bin : Optional[int]
+            Source bin index for tomographic analysis
+        is_bmode : bool
+            Whether this is B-mode analysis
+            
+        Returns
+        -------
+        Path
+            Complete filepath for precomputed random table
+        """
+        return self.get_filepath(
+            statistic=statistic,
+            galaxy_type=galaxy_type,
+            version=version,
+            survey=survey,
+            z_min=z_min,
+            z_max=z_max,
+            file_type="precomputed_random",
+            source_bin=source_bin,
+            is_bmode=is_bmode
+        )
+
     def generate_filename(
         self,
         statistic: str,
@@ -270,7 +473,7 @@ class OutputConfig(BaseConfig):
         """
         Generate filename based on parameters (legacy method).
         
-        DEPRECATED: Use get_filepath() for new code.
+        DEPRECATED: Use get_measurement_path_simple() or get_filepath() for new code.
         """
         # Use new method and return just the filename
         dummy_version = "v1.0"
@@ -482,7 +685,7 @@ class OutputConfig(BaseConfig):
             )
             
             if filepath.exists():
-                return np.load(str(filepath))
+                return np.loadtxt(str(filepath))
             else:
                 self.logger.warning(f"Covariance file not found: {filepath}")
                 return None

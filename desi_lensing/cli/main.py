@@ -58,8 +58,145 @@ def randoms():
     pass
 
 
+def add_galaxy_options(func):
+    """Add lens galaxy configuration options."""
+    func = click.option('--galaxy-type', 
+                       default='BGS_BRIGHT,LRG',
+                       help='Comma-separated list of lens galaxy types (BGS_BRIGHT, LRG, ELG)')(func)
+    func = click.option('--release',
+                       type=click.Choice(['iron', 'loa']),
+                       default='iron',
+                       help='DESI release to use (iron=current, loa=future)')(func)
+    func = click.option('--z-bins', 
+                       help='Comma-separated redshift bin edges (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--bgs-version', default='v1.5', help='BGS catalogue version')(func)
+    func = click.option('--lrg-version', default='v1.5', help='LRG catalogue version')(func)
+    func = click.option('--elg-version', default='v1.5', help='ELG catalogue version')(func)
+    func = click.option('--randoms', default='1,2', help='Comma-separated random indices')(func)
+    func = click.option('--randoms-ratio', type=float, default=-1.0,
+                       help='Ratio of randoms to lenses. If >= 0, subsample randoms to this ratio * len(lenses)')(func)
+    func = click.option('--magnitude-cuts/--no-magnitude-cuts', default=True, 
+                       help='Apply magnitude cuts')(func)
+    func = click.option('--mstar-complete', is_flag=True, help='Use stellar mass complete sample')(func)
+    return func
+
+
+def add_source_options(func):
+    """Add source survey configuration options."""
+    func = click.option('--source-surveys', 
+                       default='DECADE,DES,KiDS,HSCY3,SDSS',
+                       help='Comma-separated list of source surveys (DES, KiDS, HSCY1, HSCY3, SDSS, DECADE, DECADE_NGC, DECADE_SGC)')(func)
+    func = click.option('--cut-to-desi/--no-cut-to-desi', default=True,
+                       help='Cut source catalogues to DESI footprint')(func)
+    return func
+
+
+def add_computation_options(func):
+    """Add computation configuration options."""
+    func = click.option('--cosmology', 
+                       type=click.Choice(['planck18', 'wmap9', 'wcdm']),
+                       default='planck18', help='Cosmology to use')(func)
+    func = click.option('--h0', type=float, default=100.0, help='Hubble constant')(func)
+    func = click.option('--w0', type=float, help='Dark energy w0 parameter (for wCDM)')(func)
+    func = click.option('--wa', type=float, help='Dark energy wa parameter (for wCDM)')(func)
+    func = click.option('--n-jobs', type=int, default=0, help='Number of parallel jobs (0=auto)')(func)
+    func = click.option('--tomography/--no-tomography', default=True, 
+                       help='Use tomographic analysis')(func)
+    func = click.option('--comoving/--physical', default=True,
+                       help='Use comoving vs physical coordinates')(func)
+    func = click.option('--lens-source-cut', type=float, default=None,
+                       help='Lens-source separation cut (None for no cut)')(func)
+    func = click.option('--n-jackknife', type=int, default=100,
+                       help='Number of jackknife fields')(func)
+    func = click.option('--bmodes/--no-bmodes', default=False,
+                       help='Compute B-modes (45-degree rotated shears)')(func)
+    func = click.option('--GPU/--CPU', 'use_gpu', default=True,
+                       help='Use GPU vs CPU for computation')(func)
+    func = click.option('--force-shared/--do-not-force-shared', 'force_shared_flag', default=None,
+                       help='Force shared memory for GPU computation (auto-decided if not specified)')(func)
+    return func
+
+
+def add_binning_options(func):
+    """Add binning configuration options."""
+    func = click.option('--rp-min', type=float, default=0.08, help='Minimum rp [Mpc/h]')(func)
+    func = click.option('--rp-max', type=float, default=80.0, help='Maximum rp [Mpc/h]')(func)
+    func = click.option('--n-rp-bins', type=int, default=15, help='Number of rp bins')(func)
+    func = click.option('--theta-min', type=float, default=0.3, help='Minimum theta [arcmin]')(func)
+    func = click.option('--theta-max', type=float, default=300.0, help='Maximum theta [arcmin]')(func)
+    func = click.option('--n-theta-bins', type=int, default=15, help='Number of theta bins')(func)
+    func = click.option('--binning', type=click.Choice(['log', 'linear']), default='log',
+                       help='Binning type')(func)
+    return func
+
+
+def add_output_options(func):
+    """Add output configuration options."""
+    func = click.option('--output-dir', type=click.Path(),
+                       default='/pscratch/sd/s/sven/lensing_measurements/',
+                       help='Output directory')(func)
+    func = click.option('--catalogue-path', type=click.Path(),
+                       default='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/desi_catalogues/',
+                       help='Catalogue base path for lens galaxies')(func)
+    func = click.option('--source-catalogue-path', type=click.Path(),
+                       default='/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/',
+                       help='Catalogue base path for source galaxies')(func)
+    func = click.option('--save-precomputed/--no-save-precomputed', default=True,
+                       help='Save precomputed tables')(func)
+    func = click.option('--apply-blinding/--no-blinding', default=True,
+                       help='Apply blinding to results')(func)
+    return func
+
+
 def add_common_options(func):
-    """Add common options to compute commands."""
+    """
+    Add all common options to a command (comprehensive set).
+    
+    This is a convenience decorator that applies all option groups.
+    For more targeted option sets, use specific decorators like
+    @add_galaxy_options, @add_source_options, etc.
+    """
+    func = add_galaxy_options(func)
+    func = add_source_options(func)
+    func = add_computation_options(func)
+    func = add_binning_options(func)
+    func = add_output_options(func)
+    return func
+
+
+def add_basic_options(func):
+    """
+    Add basic options for typical usage (simplified set).
+    
+    This is a simpler alternative to @add_common_options that includes
+    only the most commonly used options.
+    """
+    # Basic galaxy options
+    func = click.option('--galaxy-type', 
+                       default='BGS_BRIGHT,LRG',
+                       help='Comma-separated list of lens galaxy types (BGS_BRIGHT, LRG, ELG)')(func)
+    func = click.option('--z-bins', 
+                       help='Comma-separated redshift bin edges (e.g., "0.1,0.2,0.3,0.4")')(func)
+    
+    # Basic source options
+    func = click.option('--source-surveys', 
+                       default='DECADE,DES,KiDS,HSCY3',
+                       help='Comma-separated list of source surveys')(func)
+    
+    # Basic computation options
+    func = click.option('--n-jobs', type=int, default=0, help='Number of parallel jobs (0=auto)')(func)
+    func = click.option('--GPU/--CPU', 'use_gpu', default=True, help='Use GPU vs CPU')(func)
+    
+    # Basic output options
+    func = click.option('--output-dir', type=click.Path(),
+                       default='/pscratch/sd/s/sven/lensing_measurements/',
+                       help='Output directory')(func)
+    return func
+
+
+# Keep the old definition for backward compatibility but mark as deprecated
+def _add_common_options_legacy(func):
+    """DEPRECATED: Use add_common_options or add_basic_options instead."""
     # Galaxy configuration
     func = click.option('--galaxy-type', 
                        default='BGS_BRIGHT,LRG',
@@ -83,7 +220,7 @@ def add_common_options(func):
     # Source survey configuration
     func = click.option('--source-surveys', 
                        default='DECADE,DES,KiDS,HSCY3,SDSS',
-                       help='Comma-separated list of source surveys (DES, KiDS, HSCY1, HSCY3, SDSS, DECADE, DECADE_NGC, DECADE_SGC)')(func)
+                       help='Comma-separated list of source surveys')(func)
     func = click.option('--cut-to-desi/--no-cut-to-desi', default=True,
                        help='Cut source catalogues to DESI footprint')(func)
     
@@ -279,21 +416,33 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
     return computation_config, lens_configs, source_config, output_config, plot_config, analysis_config
 
 
-@compute.command()
-@add_common_options
-@click.pass_context
-def deltasigma(ctx, **kwargs):
-    """Compute Delta Sigma statistic."""
+def _execute_computation(ctx, statistic: str, statistic_display_name: str, **kwargs):
+    """
+    Execute a lensing computation for a given statistic.
+    
+    This helper function consolidates common logic for all computation commands.
+    
+    Parameters
+    ----------
+    ctx : click.Context
+        Click context object
+    statistic : str
+        Statistic name ('deltasigma' or 'gammat')
+    statistic_display_name : str
+        Human-readable statistic name for logging
+    **kwargs : dict
+        Command-line arguments
+    """
     logger = ctx.obj['logger']
     
     if kwargs.get('bmodes', False):
-        logger.info("Starting Delta Sigma computation with B-modes (45-degree source galaxy rotation)")
+        logger.info(f"Starting {statistic_display_name} computation with B-modes (45-degree source galaxy rotation)")
     else:
-        logger.info("Starting Delta Sigma computation")
+        logger.info(f"Starting {statistic_display_name} computation")
     
     # Create configurations
     comp_config, lens_configs, source_config, output_config, _, analysis_config = create_configs_from_args(**kwargs)
-    comp_config.statistics = ['deltasigma']
+    comp_config.statistics = [statistic]
     
     # Validate configuration
     validator = ConfigValidator(comp_config, lens_configs[0], source_config, output_config)
@@ -311,8 +460,16 @@ def deltasigma(ctx, **kwargs):
     pipeline = LensingPipeline(comp_config, lens_configs[0], source_config, output_config, logger)
     pipeline.run()
     
-    computation_type = "Delta Sigma B-mode" if kwargs.get('bmodes', False) else "Delta Sigma"
+    computation_type = f"{statistic_display_name} B-mode" if kwargs.get('bmodes', False) else statistic_display_name
     logger.info(f"{computation_type} computation completed")
+
+
+@compute.command()
+@add_common_options
+@click.pass_context
+def deltasigma(ctx, **kwargs):
+    """Compute Delta Sigma statistic."""
+    _execute_computation(ctx, 'deltasigma', 'Delta Sigma', **kwargs)
 
 
 @compute.command()
@@ -320,35 +477,40 @@ def deltasigma(ctx, **kwargs):
 @click.pass_context
 def gammat(ctx, **kwargs):
     """Compute Gamma_t statistic."""
+    _execute_computation(ctx, 'gammat', 'Gamma_t', **kwargs)
+
+
+def _setup_plotter_command(ctx, **kwargs):
+    """
+    Common setup for plotting commands.
+    
+    This helper consolidates configuration creation, style setup, and plotter
+    initialization that is shared across all plotting commands.
+    
+    Parameters
+    ----------
+    ctx : click.Context
+        Click context object
+    **kwargs : dict
+        Command-line arguments
+        
+    Returns
+    -------
+    tuple
+        (logger, comp_config, lens_configs, source_config, output_config, 
+         plot_config, analysis_config)
+    """
+    from ..analysis.plotting_utils import setup_matplotlib_style
+    
     logger = ctx.obj['logger']
     
-    if kwargs.get('bmodes', False):
-        logger.info("Starting Gamma_t computation with B-modes (45-degree source galaxy rotation)")
-    else:
-        logger.info("Starting Gamma_t computation")
-    
     # Create configurations
-    comp_config, lens_configs, source_config, output_config, _, analysis_config = create_configs_from_args(**kwargs)
-    comp_config.statistics = ['gammat']
+    comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = create_configs_from_args(**kwargs)
     
-    # Validate configuration
-    validator = ConfigValidator(comp_config, lens_configs[0], source_config, output_config)
-    if not validator.is_valid():
-        logger.error("Configuration validation failed:")
-        logger.error(validator.get_error_summary())
-        sys.exit(1)
+    # Setup matplotlib style
+    setup_matplotlib_style(plot_config.style)
     
-    # Show warnings
-    warnings = validator.get_warnings()
-    for warning in warnings:
-        logger.warning(warning)
-    
-    # Run pipeline
-    pipeline = LensingPipeline(comp_config, lens_configs[0], source_config, output_config, logger)
-    pipeline.run()
-    
-    computation_type = "Gamma_t B-mode" if kwargs.get('bmodes', False) else "Gamma_t"
-    logger.info(f"{computation_type} computation completed")
+    return logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config
 
 
 @plot.command()
@@ -362,17 +524,11 @@ def gammat(ctx, **kwargs):
 def datavector(ctx, **kwargs):
     """Plot data vectors (tomographic or non-tomographic)."""
     from ..analysis.plotting import create_multi_galaxy_plotter_from_configs
-    from ..analysis.plotting_utils import setup_matplotlib_style
     
-    logger = ctx.obj['logger']
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
     logger.info(f"Plotting data vectors for {kwargs['statistic']}")
     
-    # Create configurations
-    comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = create_configs_from_args(**kwargs)
     comp_config.statistics = [kwargs['statistic']]
-    
-    # Setup matplotlib style
-    setup_matplotlib_style(plot_config.style)
     
     # Create multi-galaxy plotter
     plotter = create_multi_galaxy_plotter_from_configs(
@@ -404,18 +560,13 @@ def datavector(ctx, **kwargs):
 def bmodes(ctx, **kwargs):
     """Plot B-mode diagnostics for systematics testing."""
     from ..analysis.plotting import create_plotter_from_configs
-    from ..analysis.plotting_utils import setup_matplotlib_style, save_p_values_table
+    from ..analysis.plotting_utils import save_p_values_table
     
-    logger = ctx.obj['logger']
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
     logger.info(f"Plotting B-mode diagnostics for {kwargs['statistic']}")
     
-    # Create configurations
-    comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = create_configs_from_args(**kwargs)
     comp_config.statistics = [kwargs['statistic']]
     comp_config.bmodes = True  # Force B-modes for this analysis
-    
-    # Setup matplotlib style
-    setup_matplotlib_style(plot_config.style)
     
     # Create plotter
     plotter = create_plotter_from_configs(
@@ -457,17 +608,11 @@ def bmodes(ctx, **kwargs):
 def plot_randoms(ctx, **kwargs):
     """Plot random lens tests for systematics testing."""
     from ..analysis.plotting import create_plotter_from_configs
-    from ..analysis.plotting_utils import setup_matplotlib_style
     
-    logger = ctx.obj['logger']
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
     logger.info(f"Plotting random lens tests for {kwargs['statistic']}")
     
-    # Create configurations
-    comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = create_configs_from_args(**kwargs)
     comp_config.statistics = [kwargs['statistic']]
-    
-    # Setup matplotlib style
-    setup_matplotlib_style(plot_config.style)
     
     # Create plotter
     plotter = create_plotter_from_configs(
@@ -487,6 +632,42 @@ def plot_randoms(ctx, **kwargs):
 @plot.command()
 @add_common_options
 @add_plotting_options
+@click.option('--statistic', 
+              type=click.Choice(['deltasigma', 'gammat']),
+              default='deltasigma',
+              help='Lensing statistic to plot')
+@click.pass_context
+def survey_comparison(ctx, **kwargs):
+    """Plot survey comparison with tomographic bins as rows."""
+    from ..analysis.plotting import create_plotter_from_configs
+    
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
+    logger.info(f"Plotting survey comparison for {kwargs['statistic']}")
+    
+    comp_config.statistics = [kwargs['statistic']]
+    
+    # Create plotter for first lens config (supports single galaxy type)
+    plotter = create_plotter_from_configs(
+        comp_config, lens_configs[0], source_config, output_config, plot_config, analysis_config, logger
+    )
+    
+    # Generate plots
+    if comp_config.tomography:
+        plotter.plot_survey_comparison_tomographic(
+            statistic=kwargs['statistic'],
+            log_scale=plot_config.log_scale,
+            save_plot=plot_config.save_plots,
+            filename_suffix=plot_config.filename_suffix
+        )
+    else:
+        logger.warning("Non-tomographic survey comparison not yet implemented")
+    
+    logger.info("Survey comparison plotting completed")
+
+
+@plot.command()
+@add_common_options
+@add_plotting_options
 @click.option('--magnitude-cuts',
               help='Comma-separated magnitude cuts per redshift bin (e.g., "-19.5,-20.5,-21.0")')
 @click.option('--mag-col', default='ABSMAG01_SDSS_R',
@@ -499,13 +680,9 @@ def plot_randoms(ctx, **kwargs):
 def magnitudes(ctx, **kwargs):
     """Plot absolute magnitude distributions with magnitude cuts and redshift bin boundaries."""
     from ..analysis.plotting import create_plotter_from_configs
-    from ..analysis.plotting_utils import setup_matplotlib_style
     
-    logger = ctx.obj['logger']
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
     logger.info("Plotting magnitude distributions")
-    
-    # Create configurations
-    comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = create_configs_from_args(**kwargs)
     
     # Parse magnitude cuts if provided
     magnitude_cuts = None
@@ -515,9 +692,6 @@ def magnitudes(ctx, **kwargs):
         except ValueError:
             logger.error("Invalid magnitude cuts format. Use comma-separated floats like '-19.5,-20.5,-21.0'")
             sys.exit(1)
-    
-    # Setup matplotlib style
-    setup_matplotlib_style(plot_config.style)
     
     # Plot for each galaxy type
     for lens_config in lens_configs:
@@ -555,13 +729,10 @@ def magnitudes(ctx, **kwargs):
 def compare_cosmologies(ctx, **kwargs):
     """Compare results from different cosmological models."""
     from ..analysis.plotting import create_plotter_from_configs
-    from ..analysis.plotting_utils import setup_matplotlib_style
     
-    logger = ctx.obj['logger']
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
     logger.info(f"Comparing cosmologies for {kwargs['statistic']}")
     
-    # Create base configurations
-    comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = create_configs_from_args(**kwargs)
     comp_config.statistics = [kwargs['statistic']]
     
     # Parse cosmologies
@@ -580,9 +751,6 @@ def compare_cosmologies(ctx, **kwargs):
             n_rp_bins=kwargs['n_rp_bins'],
         )
         cosmology_configs[cosmo] = cosmo_config
-    
-    # Setup matplotlib style
-    setup_matplotlib_style(plot_config.style)
     
     # Create plotter
     plotter = create_plotter_from_configs(
