@@ -2,6 +2,7 @@ import numpy as np
 import h5py
 import healpy as hp
 from astropy.table import Table
+from dsigma.surveys import decade
 
 
 useful_cols = ['RA', 'DEC', 'MCAL_SEL_1P', 'MCAL_SEL_1M', 'MCAL_SEL_2P', 'MCAL_SEL_2M',
@@ -11,8 +12,8 @@ useful_cols = ['RA', 'DEC', 'MCAL_SEL_1P', 'MCAL_SEL_1M', 'MCAL_SEL_2P', 'MCAL_S
                'MCAL_W_NOSHEAR', 'MCAL_W_1P', 'MCAL_W_1M', 'MCAL_W_2P', 'MCAL_W_2M',
                'DNF_Z']
 
-inputdir = f"/pscratch/sd/z/zwshao/DECADE/"
-outputdir = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/lensingsurvey_catalogues/decade/"
+inputdir = f"/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/lensingsurvey_catalogues/decade_raw/"
+outputdir = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/lensingsurvey_catalogues/"
 
 with h5py.File(f"{inputdir}/shear_catalog_sparse.hdf5", "r") as tfile:
     tab = dict()
@@ -30,8 +31,21 @@ tab_sgc = tab[SGC_only]
 
 print(np.sum(NGC_only), np.sum(SGC_only))
 
-tab_ngc.write(f"{outputdir}/decade_ngc_cat.hdf5", overwrite=True)
-tab_sgc.write(f"{outputdir}/decade_sgc_cat.hdf5", overwrite=True)
+for tab in [tab_ngc, tab_sgc]:
+    for mcal_i in range(2):
+        for mcal_j in range(2):
+            tab[f'R_gamma_{mcal_i+1}{mcal_j+1}'] = np.zeros(len(tab))
+
+for tab in [tab_ngc, tab_sgc]:
+    for z_bin in range(4):
+        R_gamma,_ = decade.shear_response(tab,z_bin,include_selection_response=False)
+        select = tab['MCAL_SEL_NOSHEAR'] == z_bin + 1
+        for mcal_i in range(2):
+            for mcal_j in range(2):
+                tab[f'R_gamma_{mcal_i+1}{mcal_j+1}'][select] = R_gamma[mcal_i,mcal_j]
+
+tab_ngc.write(f"{outputdir}/decade_ngc/decade_ngc_cat.hdf5", overwrite=True)
+tab_sgc.write(f"{outputdir}/decade_sgc/decade_sgc_cat.hdf5", overwrite=True)
 
 nz = dict()
 for key in ['NGC', 'SGC']:
