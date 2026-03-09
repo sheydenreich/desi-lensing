@@ -1,10 +1,11 @@
 from copy import deepcopy
 import os
+from pathlib import Path
 import numpy as np
 import sys
 import healpy as hp
 from glob import glob
-from astropy.table import Table
+from astropy.table import Table,vstack
 import argparse
 
 def clean_filename(filename):
@@ -30,10 +31,12 @@ def cut_to_footprint(table, _lensing_survey, galaxy_type, ra_col="RA", dec_col="
     else:
         if(galaxy_type=="LRG"):
             galaxy_loadname="LRG"
-        elif galaxy_type in ["BGS","BGS_BRIGHT"]:
+        elif galaxy_type[:3] == "BGS":
             galaxy_loadname="BGS"
-        elif galaxy_type == "ELG":
+        elif galaxy_type[:3] == "ELG":
             galaxy_loadname="ELG"
+        elif galaxy_type == "QSO":
+            galaxy_loadname="QSO"
         else:
             raise ValueError(f"galaxy_type {galaxy_type} not recognized")
         footfile = footfile_fpath+f"{lensing_survey}_Y3{galaxy_loadname}_nside{nside}.fits"
@@ -125,12 +128,45 @@ def cut_to_joint_footprint(table_1,table_2,desi_galaxy_type=None,source_survey=N
 
     return table_1,table_2
 
+def load_catalogue(fpath_load,galaxy_type,catalogue_type,random=None):
+    cat_from_lssdir = ("/global/cfs/cdirs/desi/survey/catalogs/DA2/LSS/" in fpath_load)
+    if galaxy_type == "BGS_BRIGHT" and "clustering" in catalogue_type and cat_from_lssdir:
+        fgal_in = "BGS_BRIGHT-21.35"
+    else:
+        fgal_in = galaxy_type
+    if not cat_from_lssdir:
+        fgal_in = fgal_in+"targetIDs"
+    if random is None:
+        frand = ""
+        suffix = ".dat.fits"
+    else:
+        frand = f"_{random}"
+        suffix = ".ran.fits"
+
+    # print(fpath_load,galaxy_type,fgal_in,frand,catalogue_type,suffix)
+    # print("*"*50)
+    
+    if "clustering" in catalogue_type:
+        print("Stacking: ",fpath_load+f"{fgal_in}_NGC/SGC{frand}_{catalogue_type}{suffix}")
+        return vstack([Table.read(fpath_load+f"{fgal_in}{fgalcap}{frand}_{catalogue_type}{suffix}") for fgalcap in ["_NGC","_SGC"]])
+    try:
+        return Table.read(fpath_load+f"{fgal_in}{frand}_{catalogue_type}{suffix}")
+    except FileNotFoundError:
+        print(f"File not found: {fpath_load}, {fgal_in}{frand}_{catalogue_type}{suffix}, trying parent directory")
+        return Table.read(Path(fpath_load).parent / f"{fgal_in}{frand}_{catalogue_type}{suffix}")
+
 
 if(__name__=="__main__"):
     parser = argparse.ArgumentParser(description='Cut catalogues to footprint')
     parser.add_argument('input_path', help='Input path containing FITS files')
     parser.add_argument('--output_path', '-o', help='Output path (if not specified, uses input path)')
-    
+    parser.add_argument('--galaxy-types', default='BGS_BRIGHT,BGS_ANY,LRG,ELG_LOPnotqso,QSO', 
+    help='Comma-separated list of galaxy types to cut to footprint')
+    parser.add_argument('--lensing-surveys', default='decade_ngc,decade_sgc,kids1000N,desy3,hscy3', 
+    help='Comma-separated list of lensing surveys to cut to footprint')
+    parser.add_argument('--nrandoms', default=2, help='Number of randoms to cut')
+    parser.add_argument('--suffixes', default='full_HPmapcut,clustering')
+
     args = parser.parse_args()
     
     input_path = args.input_path
@@ -148,26 +184,25 @@ if(__name__=="__main__"):
     print(f"Input path: {input_path}")
     print(f"Output path: {output_path}")
     
-    files = glob(input_path+'*.fits')
-    print(files)
-    if "pip" in input_path.split('/')[-2]:  # Check parent directory name
-        files = [file for file in files if "clustering" in file]
-    else:
-        files = [file for file in files if ("clustering" in os.path.basename(file) or "full_HPmapcut" in os.path.basename(file))]
-        files = [file for file in files if not "ELG" in os.path.basename(file)]
+    for galaxy_type in args.galaxy_types.split(','):
+        for catalogue_type in args.suffixes.split(','):
+            for random in [None,*range(args.nrandoms)]:
+                if "full_HPmapcut" in catalogue_type and random is not None:
+                    # no need for randoms at full_HPmapcut
+                    continue
+                galcat_data = load_catalogue(input_path,galaxy_type,catalogue_type,random)
+                if random is None:
+                    frand = ""
+                    suffix = ".dat.fits"
+                else:
+                    frand = f"_{random}"
+                    suffix = ".ran.fits"
 
-    for fpath_load in files:
-        filename = os.path.basename(fpath_load)
-        if "NGC" in filename or "SGC" in filename:
-            continue
-
-        print("Reading "+fpath_load)
-        galcat_data = Table.read(fpath_load)
-        galaxy_type = clean_filename(filename.split("_")[0])
-        for lensing_survey in ["decade_ngc","decade_sgc","kids1000N","desy3","hscy3"]:
-            fpath_save_cut = output_path+f"{lensing_survey}/"
-            os.makedirs(fpath_save_cut,exist_ok=True)
-            data_cat_processed_cut = cut_to_footprint(galcat_data,lensing_survey,galaxy_type,verbose=True)
-            print("Writing "+fpath_save_cut+clean_filename(filename))
-            data_cat_processed_cut.write(fpath_save_cut+clean_filename(filename),overwrite=True)
+                for lensing_survey in args.lensing_surveys.split(','):
+                    fpath_save_cut = output_path+f"{lensing_survey}/"
+                    os.makedirs(fpath_save_cut,exist_ok=True)
+                    data_cat_processed_cut = cut_to_footprint(galcat_data,lensing_survey,galaxy_type,verbose=True)
+                    filename = f"{galaxy_type}{frand}_{catalogue_type}{suffix}"
+                    print("Writing "+fpath_save_cut+clean_filename(filename))
+                    data_cat_processed_cut.write(fpath_save_cut+clean_filename(filename),overwrite=True)
 
