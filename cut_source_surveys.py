@@ -86,13 +86,13 @@ fpath_load = {"KiDS":fpath+"{}kids/kids_cat{}.fits",
              "HSCY1":fpath+"{}hsc/hsc_cat{}.fits",
              "DES":fpath+"{}desy3/desy3_cat_newsompz{}.fits",
              "HSCY3":fpath+"{}hscy3/hscy3_cat{}.fits",
-             "DECADE_NGC":fpath+"{}decade/decade_ngc_cat{}.hdf5",
-             "DECADE_SGC":fpath+"{}decade/decade_sgc_cat{}.hdf5",
+             "DECADE_NGC":fpath+"{}decade_ngc/decade_ngc_cat{}.hdf5",
+             "DECADE_SGC":fpath+"{}decade_sgc/decade_sgc_cat{}.hdf5",
              }
 
 for source_survey in ["DECADE_NGC","DECADE_SGC","KiDS","DES","HSCY3"]:
 # for source_survey in ["DES"]:
-    for galaxy_types in powerset(["BGS","LRG","ELG"]):
+    for galaxy_types in powerset(["BGS","LRG","ELG","QSO"]):
         print("Doing",source_survey,galaxy_types)
         tab = Table.read(fpath_load[source_survey].format("","").replace("_newsompz",""))
         mask = get_mask_footprint(source_survey,galaxy_types,tab["RA"],tab["Dec"])
