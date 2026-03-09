@@ -16,7 +16,7 @@ from copy import deepcopy
 from astropy.table import Table, join,vstack
 import numpy as np
 
-from ..config import ComputationConfig, LensGalaxyConfig, SourceSurveyConfig, OutputConfig, PathManager
+from ..config import ComputationConfig, LensGalaxyConfig, SourceSurveyConfig, OutputConfig, PathManager, AnalysisConfig
 from ..data.loader import DataLoader
 from .computation import DeltaSigmaComputation, GammaTComputation
 from ..utils.computation_utils import blind_dv
@@ -31,13 +31,15 @@ class LensingPipeline:
         lens_config: LensGalaxyConfig,
         source_config: SourceSurveyConfig,
         output_config: OutputConfig,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        analysis_config: Optional[AnalysisConfig] = None
     ):
         """Initialize the lensing pipeline."""
         self.computation_config = computation_config
         self.lens_config = lens_config
         self.source_config = source_config
         self.output_config = output_config
+        self.analysis_config = analysis_config or AnalysisConfig()
         
         self.logger = logger or logging.getLogger(self.__class__.__name__)
         
@@ -365,7 +367,9 @@ class LensingPipeline:
         """Process non-tomographic analysis."""
         
         # Get allowed source bins for this lens-source combination
-        allowed_bins = self._get_allowed_source_bins(source_survey, lens_bin)
+        allowed_bins = self.analysis_config.get_allowed_source_bins(
+            self.lens_config.galaxy_type, source_survey, z_max
+        )
         
         # Select sources from allowed bins
         select = np.zeros(len(table_s), dtype=bool)
@@ -430,13 +434,6 @@ class LensingPipeline:
             return None
         
         return precompute_kwargs_tomo
-    
-    def _get_allowed_source_bins(self, source_survey, lens_bin):
-        """Get allowed source bins for non-tomographic analysis."""
-        # This would import from the plotting utilities in the original code
-        # For now, return all available bins
-        n_bins = self.source_config.get_n_tomographic_bins(source_survey)
-        return list(range(n_bins))
     
     def _try_load_precomputed(self, statistic, source_survey, lens_bin, z_min, z_max, source_bin, stacking_kwargs):
         """Try to load precomputed results."""
@@ -620,6 +617,10 @@ class LensingPipeline:
             
         except Exception as e:
             self.logger.error(f"Computation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            import sys
+            sys.exit(-1)
             return None
     
     def _save_precomputed_tables(

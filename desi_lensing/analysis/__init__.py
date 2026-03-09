@@ -2,6 +2,7 @@
 
 from .plotting import DataVectorPlotter, create_plotter_from_configs
 from .randoms import RandomsAnalyzer, create_randoms_analyzer_from_configs
+from .splits import SplitsAnalyzer, create_splits_analyzer_from_configs
 from . import plotting_utils
 
 __all__ = [
@@ -9,5 +10,7 @@ __all__ = [
     "create_plotter_from_configs",
     "RandomsAnalyzer",
     "create_randoms_analyzer_from_configs",
+    "SplitsAnalyzer",
+    "create_splits_analyzer_from_configs",
     "plotting_utils",
 ] 

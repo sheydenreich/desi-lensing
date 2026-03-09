@@ -39,8 +39,26 @@ class DataLoader:
         # Cache for systematic property assignments
         self._systematic_cache = {}
     
-    def load_lens_catalogues(self, source_survey: str) -> Tuple[Table, Optional[Table]]:
-        """Load lens and random catalogues."""
+    def load_lens_catalogues(
+        self, 
+        source_survey: str,
+        extra_columns: Optional[List[str]] = None
+    ) -> Tuple[Table, Optional[Table]]:
+        """
+        Load lens and random catalogues.
+        
+        Parameters
+        ----------
+        source_survey : str
+            Source survey name
+        extra_columns : Optional[List[str]]
+            Additional columns to load from catalogues (e.g., for splits analysis)
+        
+        Returns
+        -------
+        Tuple[Table, Optional[Table]]
+            Lens and random catalogues
+        """
         self.logger.info(f"Loading lens catalogues for {self.lens_config.galaxy_type}...")
         
         galaxy_type = self.lens_config.galaxy_type
@@ -60,6 +78,12 @@ class DataLoader:
         if self.lens_config.weight_type != "None":
             columns_to_add.append(self.lens_config.weight_type)
         
+        # Add extra columns if requested
+        if extra_columns:
+            for col in extra_columns:
+                if col not in columns_to_add:
+                    columns_to_add.append(col)
+        
         # Load main catalogue
         catalogue_path = self.path_manager.get_lens_catalogue_file(
             galaxy_type, version, survey=source_survey, is_random=False
@@ -73,16 +97,30 @@ class DataLoader:
             table_l = self._apply_magnitude_cuts(table_l)
         
         
-        # Convert to dsigma table
-        table_l = dsigma_table(
-            table_l, 'lens', z='Z', ra='RA', dec='DEC', w_sys=self.lens_config.weight_type,TARGETID='TARGETID',
-            verbose=self.output_config.verbose
-        )
+        # Convert to dsigma table - pass through extra columns via kwargs
+        self.logger.info(f"Weight {self.lens_config.weight_type} for lenses")
+
+        dsigma_kwargs = {
+            'z': 'Z', 
+            'ra': 'RA', 
+            'dec': 'DEC', 
+            'w_sys': self.lens_config.weight_type,
+            'TARGETID': 'TARGETID',
+            'verbose': self.output_config.verbose
+        }
+        
+        # Add extra columns to dsigma_table kwargs (they'll be preserved)
+        if extra_columns:
+            for col in extra_columns:
+                if col not in ['RA', 'DEC', 'Z', 'TARGETID', self.lens_config.weight_type]:
+                    dsigma_kwargs[col] = col
+        print(table_l.colnames)
+        table_l = dsigma_table(table_l, 'lens', **dsigma_kwargs)
         
         # Load randoms if requested
         table_r = None
         if randoms:
-            table_r = self._load_random_catalogues(galaxy_type, source_survey, version, randoms, columns_to_add)
+            table_r = self._load_random_catalogues(galaxy_type, source_survey, version, randoms, columns_to_add, extra_columns)
         
         return table_l, table_r
     
@@ -117,6 +155,26 @@ class DataLoader:
             return self._load_decade_catalogue(galaxy_type, cut_to_desi, "SGC", survey_settings)
         else:
             raise ValueError(f"Unsupported survey: {survey}")
+    
+    def get_stacking_kwargs(self, survey: str) -> Dict[str, Any]:
+        """
+        Get stacking kwargs for a survey without loading the source catalogue.
+        
+        This is an efficient alternative to load_source_catalogue when only
+        stacking_kwargs are needed (e.g., in splits analysis).
+        
+        Parameters
+        ----------
+        survey : str
+            Source survey name
+        
+        Returns
+        -------
+        Dict[str, Any]
+            Stacking kwargs for the survey
+        """
+        survey_settings = self.source_config.get_survey_settings(survey)
+        return self._build_stacking_kwargs(survey_settings)
 
     def _load_decade_catalogue(self, galaxy_type: str, cut_to_desi: bool, ngcsgc: str, settings: Dict[str, bool]) -> Tuple[Table, Dict[str, Any], Dict[str, Any]]:
         """Load DECADE DR1 catalogue."""
@@ -135,13 +193,12 @@ class DataLoader:
             R_gamma,R_sel = decade.shear_response(table_s,z_bin)
             select = table_s['MCAL_SEL_NOSHEAR'] == z_bin + 1
             if self.output_config.verbose:
-                self.logger.info(f"Bin {z_bin + 1}: R_gamma = {100 * 0.5 * np.sum(np.diag(R_gamma)):.1f}% R_sel = {100 * 0.5 * np.sum(np.diag(R_sel)):.1f}%")
+                self.logger.info(f"Bin {z_bin + 1}: R_gamma = {100 * 0.5 * np.sum(np.diag(np.mean(R_gamma,axis=-1))):.1f}% R_sel = {100 * 0.5 * np.sum(np.diag(R_sel)):.1f}%")
                 self.logger.info(f"N_gals: {np.sum(select)}")
             for mcal_i in range(2):
                 for mcal_j in range(2):
                     table_s[f'R_{mcal_i+1}{mcal_j+1}'][select] = R_gamma[mcal_i,mcal_j] + R_sel[mcal_i,mcal_j]
 
-        table_s = table_s[table_s['DNF_Z'] >= 0]
         column_keys = {
             'ra': 'RA',
             'dec': 'Dec',
@@ -162,6 +219,8 @@ class DataLoader:
             **column_keys
         )
         table_s['z_bin'] = table_s['z_bin'] - 1
+        table_s = table_s[table_s['z_bin'] >= 0]
+        table_s['z'] = np.array([0.0, 0.381, 0.619, 0.803])[table_s['z_bin']]
         
         # Add multiplicative bias
         table_s['m'] = decade.multiplicative_shear_bias(table_s['z_bin'], gal_cap = ngcsgc)
@@ -423,7 +482,7 @@ class DataLoader:
         if galaxy_type != "BGS_BRIGHT":
             raise ValueError("Mass complete catalogues only available for BGS_BRIGHT")
         
-        necessary_columns = ['RA', 'DEC', 'Z', 'WEIGHT']
+        necessary_columns = ['RA', 'DEC', 'Z', 'WEIGHT', 'TARGETID']
         
         # File names for mass complete samples
         fnames = [
@@ -455,19 +514,19 @@ class DataLoader:
         # Convert to dsigma tables
         table_l = dsigma_table(
             fin_tab_l, 'lens', z='Z', ra='RA', dec='DEC', w_sys='WEIGHT',
-            verbose=self.output_config.verbose
+            TARGETID='TARGETID', verbose=self.output_config.verbose
         )
         
         table_r = None
         if fin_tab_r is not None:
             table_r = dsigma_table(
                 fin_tab_r, 'lens', z='Z', ra='RA', dec='DEC', w_sys='WEIGHT',
-                verbose=self.output_config.verbose
+                TARGETID='TARGETID', verbose=self.output_config.verbose
             )
         
         return table_l, table_r
     
-    def _load_random_catalogues(self, galaxy_type: str, survey: str, version: str, randoms: List[int], columns: List[str]) -> Table:
+    def _load_random_catalogues(self, galaxy_type: str, survey: str, version: str, randoms: List[int], columns: List[str], extra_columns: Optional[List[str]] = None) -> Table:
         """Load random catalogues."""
         tables = []
         
@@ -489,11 +548,23 @@ class DataLoader:
         
         table_r = vstack(tables)
         
-        # Convert to dsigma table
-        table_r = dsigma_table(
-            table_r, 'lens', z='Z', ra='RA', dec='DEC', w_sys='WEIGHT',
-            verbose=self.output_config.verbose
-        )
+        # Convert to dsigma table - pass through extra columns via kwargs
+        dsigma_kwargs = {
+            'z': 'Z',
+            'ra': 'RA', 
+            'dec': 'DEC',
+            'w_sys': 'WEIGHT',
+            'TARGETID': 'TARGETID',
+            'verbose': self.output_config.verbose
+        }
+        
+        # Add extra columns to dsigma_table kwargs (they'll be preserved)
+        if extra_columns:
+            for col in extra_columns:
+                if col not in ['RA', 'DEC', 'Z', 'WEIGHT', 'TARGETID']:
+                    dsigma_kwargs[col] = col
+        
+        table_r = dsigma_table(table_r, 'lens', **dsigma_kwargs)
         
         return table_r
     
@@ -583,12 +654,17 @@ class DataLoader:
                     self.logger.warning("TARGETID not unique in full_HPmapcut file, removing duplicates")
                     tab_full = self._cut_to_unique_targetid(tab_full)
                 
+                for col in tab_full.colnames:
+                    if col in data.colnames and not col == "TARGETID":
+                        tab_full.remove_column(col)
                 data = join(data, tab_full, keys="TARGETID", join_type="inner")
             else:
                 # Assign via healpix maps
+                self.logger.info(f"Assigning {missing_columns} from healpix maps for {filename}")
                 data = self._assign_from_healpix_maps(data, missing_columns, filename)
         else:
             # Assign via healpix maps
+            self.logger.info(f"Assigning {missing_columns} from healpix maps for {filename}")
             data = self._assign_from_healpix_maps(data, missing_columns, filename)
         
         return data
@@ -625,7 +701,7 @@ class DataLoader:
             systable = self._systematic_cache[cache_key]
         else:
             # Load systematic table
-            hpmaps_path = f"/global/cfs/cdirs/desi/survey/catalogs/Y1/LSS/iron/LSScats/{version}/hpmaps/"
+            hpmaps_path = f"/global/cfs/cdirs/desi/survey/catalogs/DA2/LSS/loa-v1/LSScats/{version}/hpmaps/"
             fname_template = f"{hpmaps_path}{galaxy_type}_mapprops_healpix_nested_nside256.fits"
             
             try:

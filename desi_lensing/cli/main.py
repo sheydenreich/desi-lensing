@@ -13,6 +13,7 @@ import sys
 import logging
 from pathlib import Path
 from typing import List, Tuple
+import numpy as np
 
 from ..config import (
     ComputationConfig, LensGalaxyConfig, SourceSurveyConfig, OutputConfig, PlotConfig, AnalysisConfig,
@@ -67,8 +68,12 @@ def add_galaxy_options(func):
                        type=click.Choice(['iron', 'loa']),
                        default='iron',
                        help='DESI release to use (iron=current, loa=future)')(func)
-    func = click.option('--z-bins', 
-                       help='Comma-separated redshift bin edges (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--z-bins-bgs-bright', 
+                       help='Comma-separated redshift bin edges for BGS_BRIGHT (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--z-bins-lrg', 
+                       help='Comma-separated redshift bin edges for LRG (e.g., "0.4,0.6,0.8,1.1")')(func)
+    func = click.option('--z-bins-elg', 
+                       help='Comma-separated redshift bin edges for ELG (e.g., "0.8,1.1,1.6")')(func)
     func = click.option('--bgs-version', default='v1.5', help='BGS catalogue version')(func)
     func = click.option('--lrg-version', default='v1.5', help='LRG catalogue version')(func)
     func = click.option('--elg-version', default='v1.5', help='ELG catalogue version')(func)
@@ -114,6 +119,10 @@ def add_computation_options(func):
                        help='Use GPU vs CPU for computation')(func)
     func = click.option('--force-shared/--do-not-force-shared', 'force_shared_flag', default=None,
                        help='Force shared memory for GPU computation (auto-decided if not specified)')(func)
+    func = click.option('--split-by', default=None,
+                       help='Comma-separated list of properties to split by (e.g., NTILE,LOGMSTAR)')(func)
+    func = click.option('--n-splits', type=int, default=4,
+                       help='Number of splits to create (default: 4)')(func)
     return func
 
 
@@ -175,8 +184,12 @@ def add_basic_options(func):
     func = click.option('--galaxy-type', 
                        default='BGS_BRIGHT,LRG',
                        help='Comma-separated list of lens galaxy types (BGS_BRIGHT, LRG, ELG)')(func)
-    func = click.option('--z-bins', 
-                       help='Comma-separated redshift bin edges (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--z-bins-bgs-bright', 
+                       help='Comma-separated redshift bin edges for BGS_BRIGHT (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--z-bins-lrg', 
+                       help='Comma-separated redshift bin edges for LRG (e.g., "0.4,0.6,0.8,1.1")')(func)
+    func = click.option('--z-bins-elg', 
+                       help='Comma-separated redshift bin edges for ELG (e.g., "0.8,1.1,1.6")')(func)
     
     # Basic source options
     func = click.option('--source-surveys', 
@@ -205,8 +218,12 @@ def _add_common_options_legacy(func):
                        type=click.Choice(['iron', 'loa']),
                        default='iron',
                        help='DESI release to use (iron=current, loa=future)')(func)
-    func = click.option('--z-bins', 
-                       help='Comma-separated redshift bin edges (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--z-bins-bgs-bright', 
+                       help='Comma-separated redshift bin edges for BGS_BRIGHT (e.g., "0.1,0.2,0.3,0.4")')(func)
+    func = click.option('--z-bins-lrg', 
+                       help='Comma-separated redshift bin edges for LRG (e.g., "0.4,0.6,0.8,1.1")')(func)
+    func = click.option('--z-bins-elg', 
+                       help='Comma-separated redshift bin edges for ELG (e.g., "0.8,1.1,1.6")')(func)
     func = click.option('--bgs-version', default='v1.5', help='BGS catalogue version')(func)
     func = click.option('--lrg-version', default='v1.5', help='LRG catalogue version')(func)
     func = click.option('--elg-version', default='v1.5', help='ELG catalogue version')(func)
@@ -320,10 +337,19 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
     """Create configuration objects from CLI arguments."""
     
     # Parse lists from strings
-    z_bins = parse_comma_separated_floats(kwargs.get('z_bins', '')) if kwargs.get('z_bins') else None
     randoms = parse_comma_separated_ints(kwargs.get('randoms', '1,2'))
     source_surveys = parse_comma_separated_strings(kwargs.get('source_surveys', 'DES,KiDS,HSCY1,HSCY3'))
     galaxy_types = parse_comma_separated_strings(kwargs.get('galaxy_type', 'BGS_BRIGHT,LRG'))
+    split_by = parse_comma_separated_strings(kwargs.get('split_by', '')) if kwargs.get('split_by') else None
+    
+    # Parse per-galaxy-type z-bins overrides
+    z_bins_overrides = {}
+    if kwargs.get('z_bins_bgs_bright'):
+        z_bins_overrides['BGS_BRIGHT'] = parse_comma_separated_floats(kwargs['z_bins_bgs_bright'])
+    if kwargs.get('z_bins_lrg'):
+        z_bins_overrides['LRG'] = parse_comma_separated_floats(kwargs['z_bins_lrg'])
+    if kwargs.get('z_bins_elg'):
+        z_bins_overrides['ELG'] = parse_comma_separated_floats(kwargs['z_bins_elg'])
     
     # Validate galaxy types
     valid_galaxy_types = ['BGS_BRIGHT', 'LRG', 'ELG']
@@ -364,6 +390,8 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
         bmodes=kwargs.get('bmodes', False),
         use_gpu=use_gpu,
         force_shared=force_shared_flag,
+        split_by=split_by,
+        n_splits=kwargs.get('n_splits', 4),
     )
     
     # Create lens configurations for each galaxy type
@@ -382,8 +410,9 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
             weight_type=kwargs.get('weight_type', 'WEIGHT'),
         )
         
-        if z_bins is not None:
-            lens_config.z_bins = z_bins
+        # Apply per-galaxy-type z-bins override, or use defaults
+        if galaxy_type in z_bins_overrides:
+            lens_config.z_bins = z_bins_overrides[galaxy_type]
         else:
             lens_config.use_default_z_bins()
         
@@ -412,6 +441,15 @@ def create_configs_from_args(**kwargs) -> Tuple[ComputationConfig, List[LensGala
     )
     
     analysis_config = AnalysisConfig()
+    
+    # Sync n_bins_per_galaxy_type with actual lens configs when user specifies fewer bins
+    # (e.g., --z-bins-bgs-bright 0.1,0.4 gives 1 bin instead of default 3)
+    # Don't increase bins beyond hardcoded defaults (e.g., LRG computed in 3 bins but only 2 analyzed)
+    for lens_config in lens_configs:
+        n_bins_from_config = lens_config.get_n_lens_bins()
+        n_bins_hardcoded = analysis_config.get_n_bins_for_galaxy_type(lens_config.galaxy_type)
+        if n_bins_from_config < n_bins_hardcoded:
+            analysis_config.set_n_bins_for_galaxy_type(lens_config.galaxy_type, n_bins_from_config)
     
     return computation_config, lens_configs, source_config, output_config, plot_config, analysis_config
 
@@ -456,12 +494,24 @@ def _execute_computation(ctx, statistic: str, statistic_display_name: str, **kwa
     for warning in warnings:
         logger.warning(warning)
     
-    # Run pipeline
-    pipeline = LensingPipeline(comp_config, lens_configs[0], source_config, output_config, logger)
-    pipeline.run()
-    
-    computation_type = f"{statistic_display_name} B-mode" if kwargs.get('bmodes', False) else statistic_display_name
-    logger.info(f"{computation_type} computation completed")
+    # Check if splits analysis is requested
+    if comp_config.split_by is not None:
+        logger.info(f"Running splits analysis for properties: {comp_config.split_by}")
+        from ..analysis.splits import create_splits_analyzer_from_configs
+        
+        splits_analyzer = create_splits_analyzer_from_configs(
+            comp_config, lens_configs[0], source_config, output_config, logger
+        )
+        splits_analyzer.run()
+        
+        logger.info(f"Splits computation completed for {statistic_display_name}")
+    else:
+        # Run standard pipeline
+        pipeline = LensingPipeline(comp_config, lens_configs[0], source_config, output_config, logger, analysis_config=analysis_config)
+        pipeline.run()
+        
+        computation_type = f"{statistic_display_name} B-mode" if kwargs.get('bmodes', False) else statistic_display_name
+        logger.info(f"{computation_type} computation completed")
 
 
 @compute.command()
@@ -549,6 +599,71 @@ def datavector(ctx, **kwargs):
     logger.info("Data vector plotting completed")
 
 
+@plot.command(name='covariance-comparison')
+@add_common_options
+@add_plotting_options
+@click.option('--statistic', 
+              type=click.Choice(['deltasigma', 'gammat']),
+              default='deltasigma',
+              help='Lensing statistic to plot')
+@click.option('--bmodes/--no-bmodes', default=False,
+              help='Compare B-mode (pure noise) covariances instead of signal covariances')
+@click.pass_context
+def covariance_comparison(ctx, **kwargs):
+    """Plot comparison of theory and jackknife covariance uncertainties.
+    
+    Creates tomographic plots showing:
+    - Theoretical uncertainty (sqrt of diagonal) as lines
+    - Jackknife uncertainty (sqrt of diagonal) as 'o' markers
+    
+    This is useful for validating covariance matrices and understanding
+    where jackknife and theory estimates agree or differ.
+    
+    Use --bmodes to compare B-mode (pure noise) covariances, which are used
+    for null tests with 45-degree rotated source galaxy shapes.
+    
+    When multiple galaxy types are specified (e.g., --galaxy-type BGS_BRIGHT,LRG),
+    creates a combined plot with columns for each galaxy type's bins.
+    
+    Example usage:
+    
+    \b
+    # Compare signal covariances
+    desi-lensing plot covariance-comparison --galaxy-type BGS_BRIGHT,LRG
+    
+    \b
+    # Compare B-mode covariances  
+    desi-lensing plot covariance-comparison --galaxy-type BGS_BRIGHT,LRG --bmodes
+    """
+    from ..analysis.plotting import create_multi_galaxy_plotter_from_configs
+    
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
+    
+    mode_str = "B-mode " if kwargs['bmodes'] else ""
+    logger.info(f"Plotting {mode_str}covariance comparison for {kwargs['statistic']}")
+    
+    comp_config.statistics = [kwargs['statistic']]
+    
+    # Create multi-galaxy plotter
+    plotter = create_multi_galaxy_plotter_from_configs(
+        comp_config, lens_configs, source_config, output_config, plot_config, analysis_config, logger
+    )
+    
+    # Generate plots
+    if comp_config.tomography:
+        plotter.plot_covariance_comparison_tomographic(
+            statistic=kwargs['statistic'],
+            log_scale=plot_config.log_scale,
+            save_plot=plot_config.save_plots,
+            filename_suffix=plot_config.filename_suffix,
+            bmodes=kwargs['bmodes']
+        )
+    else:
+        logger.warning("Non-tomographic covariance comparison not yet implemented")
+    
+    logger.info(f"{mode_str.capitalize() if mode_str else ''}Covariance comparison plotting completed")
+
+
 @plot.command()
 @add_common_options
 @add_plotting_options
@@ -558,41 +673,79 @@ def datavector(ctx, **kwargs):
               help='Lensing statistic to plot')
 @click.pass_context
 def bmodes(ctx, **kwargs):
-    """Plot B-mode diagnostics for systematics testing."""
-    from ..analysis.plotting import create_plotter_from_configs
+    """Plot B-mode diagnostics for systematics testing.
+    
+    When multiple galaxy types are specified (e.g., --galaxy-type BGS_BRIGHT,LRG),
+    creates a combined plot with columns for each galaxy type's bins.
+    """
+    from ..analysis.plotting import create_plotter_from_configs, create_multi_galaxy_plotter_from_configs
     from ..analysis.plotting_utils import save_p_values_table
     
     logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
-    logger.info(f"Plotting B-mode diagnostics for {kwargs['statistic']}")
+    
+    galaxy_types = [lc.galaxy_type for lc in lens_configs]
+    logger.info(f"Plotting B-mode diagnostics for {kwargs['statistic']} with galaxy types: {galaxy_types}")
     
     comp_config.statistics = [kwargs['statistic']]
     comp_config.bmodes = True  # Force B-modes for this analysis
     
-    # Create plotter
-    plotter = create_plotter_from_configs(
-        comp_config, lens_configs[0], source_config, output_config, plot_config, analysis_config, logger
-    )
-    
-    # Generate plots
-    if comp_config.tomography:
-        pvalues = plotter.plot_bmodes_tomographic(
-            statistic=kwargs['statistic'],
-            save_plot=plot_config.save_plots,
-            filename_suffix=plot_config.filename_suffix
+    # Use multi-galaxy mode if more than one galaxy type is requested
+    if len(lens_configs) > 1:
+        logger.info(f"Using multi-galaxy mode for {len(lens_configs)} galaxy types")
+        
+        # Create multi-galaxy plotter
+        plotter = create_multi_galaxy_plotter_from_configs(
+            comp_config, lens_configs, source_config, output_config, plot_config, analysis_config, logger
         )
         
-        # Save p-values table
-        if pvalues and plot_config.save_plots:
-            table_path = plotter.plot_dir / f"pvalues_bmodes_{kwargs['statistic']}.tex"
-            save_p_values_table(
-                pvalues, lens_configs[0], source_config, table_path,
+        # Generate combined plots
+        if comp_config.tomography:
+            pvalues = plotter.plot_bmodes_tomographic(
                 statistic=kwargs['statistic'],
-                caption=f"B-mode p-values for {kwargs['statistic']} measurements",
-                precision=3
+                save_plot=plot_config.save_plots,
+                filename_suffix=plot_config.filename_suffix
             )
-            logger.info(f"B-mode table saved to {table_path}")
+            
+            # Save p-values table for combined results
+            if pvalues and plot_config.save_plots:
+                galaxy_suffix = "_".join(galaxy_types)
+                table_path = plotter.plot_dir / f"pvalues_bmodes_{kwargs['statistic']}_{galaxy_suffix}.tex"
+                # Save combined p-values table (using first lens_config for basic table formatting)
+                save_p_values_table(
+                    pvalues, lens_configs[0], source_config, table_path,
+                    statistic=kwargs['statistic'],
+                    caption=f"B-mode p-values for {kwargs['statistic']} measurements ({', '.join(galaxy_types)})",
+                    precision=3
+                )
+                logger.info(f"Combined B-mode table saved to {table_path}")
+        else:
+            logger.warning("Non-tomographic B-mode plotting not yet implemented")
     else:
-        logger.warning("Non-tomographic B-mode plotting not yet implemented")
+        # Single galaxy type - use standard plotter
+        plotter = create_plotter_from_configs(
+            comp_config, lens_configs[0], source_config, output_config, plot_config, analysis_config, logger
+        )
+        
+        # Generate plots
+        if comp_config.tomography:
+            pvalues = plotter.plot_bmodes_tomographic(
+                statistic=kwargs['statistic'],
+                save_plot=plot_config.save_plots,
+                filename_suffix=plot_config.filename_suffix
+            )
+            
+            # Save p-values table
+            if pvalues and plot_config.save_plots:
+                table_path = plotter.plot_dir / f"pvalues_bmodes_{kwargs['statistic']}.tex"
+                save_p_values_table(
+                    pvalues, lens_configs[0], source_config, table_path,
+                    statistic=kwargs['statistic'],
+                    caption=f"B-mode p-values for {kwargs['statistic']} measurements",
+                    precision=3
+                )
+                logger.info(f"B-mode table saved to {table_path}")
+        else:
+            logger.warning("Non-tomographic B-mode plotting not yet implemented")
     
     logger.info("B-mode plotting completed")
 
@@ -722,6 +875,89 @@ def magnitudes(ctx, **kwargs):
               type=click.Choice(['deltasigma', 'gammat']),
               default='deltasigma',
               help='Lensing statistic to plot')
+@click.option('--split-by',
+              default='NTILE,ra,dec',
+              help='Comma-separated list of properties to plot splits for (e.g., "NTILE,ra,dec,LOGMSTAR")')
+@click.option('--n-splits', type=int, default=4,
+              help='Number of splits')
+@click.option('--scale-categories',
+              default='small scales,large scales,all scales',
+              help='Comma-separated list of scale categories')
+@click.option('--use-randoms-uncertainty/--use-covariance-uncertainty', default=False,
+              help='Use randoms for slope uncertainty estimation vs covariance')
+@click.option('--plot-slope/--no-plot-slope', default=True,
+              help='Plot the fitted slope line')
+@click.option('--plot-slope-uncertainty/--no-plot-slope-uncertainty', default=True,
+              help='Plot slope uncertainty band')
+@click.option('--critical-sigma', type=float, default=3.0,
+              help='Highlight slopes more significant than this (in sigma)')
+@click.option('--boost-correction/--no-boost-correction', default=False,
+              help='Whether boost correction was applied in splits computation')
+@click.pass_context
+def splits_plot(ctx, **kwargs):
+    """Plot amplitude vs split property values for systematics testing.
+    
+    This creates plots showing how lensing signal amplitudes vary with 
+    split properties (e.g., NTILE, RA, DEC, LOGMSTAR) for different lens bins 
+    and scale categories. A non-zero slope indicates systematic bias.
+    
+    When multiple galaxy types are specified (e.g., --galaxy-type BGS_BRIGHT,LRG),
+    all galaxy types are plotted in a single combined figure with columns for each
+    lens bin across all galaxy types.
+    """
+    from ..analysis.plotting import create_multi_galaxy_plotter_from_configs
+    
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
+    
+    galaxy_types = [lc.galaxy_type for lc in lens_configs]
+    logger.info(f"Plotting splits for {kwargs['statistic']} with galaxy types: {galaxy_types}")
+    
+    comp_config.statistics = [kwargs['statistic']]
+    
+    # Parse split properties and scale categories
+    splits_to_plot = parse_comma_separated_strings(kwargs['split_by'])
+    scale_categories = parse_comma_separated_strings(kwargs['scale_categories'])
+    
+    # Create multi-galaxy plotter with all lens configs
+    plotter = create_multi_galaxy_plotter_from_configs(
+        comp_config, lens_configs, source_config, output_config, plot_config, analysis_config, logger
+    )
+    
+    # Plot all splits in a single combined figure
+    results = plotter.plot_all_splits(
+        splits_to_consider=splits_to_plot,
+        n_splits=kwargs['n_splits'],
+        statistic=kwargs['statistic'],
+        scale_categories=scale_categories,
+        use_randoms_uncertainty=kwargs['use_randoms_uncertainty'],
+        plot_slope=kwargs['plot_slope'],
+        plot_slope_uncertainty=kwargs['plot_slope_uncertainty'],
+        critical_sigma=kwargs['critical_sigma'],
+        save_plot=plot_config.save_plots,
+        filename_suffix=plot_config.filename_suffix,
+        boost_correction=kwargs['boost_correction'],
+        verbose=ctx.obj.get('verbose', True)
+    )
+    
+    # Log significant slopes
+    for key, result in results.items():
+        slope = result.get('slope')
+        slope_err = result.get('slope_error')
+        if slope is not None and slope_err is not None and slope_err > 0:
+            significance = abs(slope) / slope_err
+            if significance > kwargs['critical_sigma']:
+                logger.warning(f"Significant slope detected: {key} = {slope:.3f} ± {slope_err:.3f} ({significance:.1f}σ)")
+    
+    logger.info("Splits plotting completed")
+
+
+@plot.command()
+@add_common_options
+@add_plotting_options
+@click.option('--statistic', 
+              type=click.Choice(['deltasigma', 'gammat']),
+              default='deltasigma',
+              help='Lensing statistic to plot')
 @click.option('--cosmologies',
               default='planck18,wcdm',
               help='Comma-separated list of cosmologies to compare')
@@ -766,6 +1002,324 @@ def compare_cosmologies(ctx, **kwargs):
     )
     
     logger.info("Cosmology comparison plotting completed")
+
+
+@plot.command(name='source-redshift-slope')
+@add_common_options
+@add_plotting_options
+@click.option('--statistic', 
+              type=click.Choice(['deltasigma', 'gammat']),
+              default='deltasigma',
+              help='Lensing statistic to plot')
+@click.option('--scale-categories',
+              default='small scales,large scales,all scales',
+              help='Comma-separated list of scale categories')
+@click.option('--use-theory-covariance/--use-jackknife-covariance', default=True,
+              help='Use theory vs jackknife covariance matrices')
+@click.option('--use-all-bins/--use-allowed-bins', default=False,
+              help='Use all source bins vs only allowed bins per lens bin')
+@click.option('--plot-slope/--no-plot-slope', default=True,
+              help='Plot the fitted slope line')
+@click.option('--plot-slope-uncertainty/--no-plot-slope-uncertainty', default=True,
+              help='Plot slope uncertainty band')
+@click.option('--compute-sigma-sys/--no-sigma-sys', default=True,
+              help='Compute systematic uncertainty from amplitude scatter')
+@click.option('--sigma-sys-method',
+              type=click.Choice(['bayesian', 'reduced_chisq']),
+              default='reduced_chisq',
+              help='Method for sigma_sys calculation')
+@click.option('--critical-sigma', type=float, default=3.0,
+              help='Highlight slopes more significant than this (in sigma)')
+@click.option('--slope-color', default='black',
+              help='Color for the fitted slope line')
+@click.option('--hscy3-deltaz-shifts',
+              help='Comma-separated HSCY3 source redshift shifts per bin (e.g., "0,0,0.115,0.192")')
+@click.pass_context
+def source_redshift_slope_plot(ctx, **kwargs):
+    """
+    Plot lensing amplitudes vs source redshift with slope fitting.
+    
+    This diagnostic plot shows how lensing signal amplitudes vary with source
+    redshift for different lens bins and scale categories. A non-zero slope
+    could indicate systematic biases related to source redshift estimation
+    or calibration issues.
+    
+    When multiple galaxy types are specified (e.g., --galaxy-type BGS_BRIGHT,LRG),
+    creates a combined plot with columns for each galaxy type's bins.
+    
+    Example usage:
+    
+    \b
+    desi-lensing plot source-redshift-slope --galaxy-type BGS_BRIGHT,LRG \\
+        --source-surveys KiDS,DES,HSCY3,DECADE \\
+        --use-theory-covariance --scale-categories "small scales,large scales"
+    """
+    from ..analysis.plotting import create_plotter_from_configs, create_multi_galaxy_plotter_from_configs
+    
+    logger, comp_config, lens_configs, source_config, output_config, plot_config, analysis_config = _setup_plotter_command(ctx, **kwargs)
+    logger.info(f"Plotting source redshift slope for {kwargs['statistic']}")
+    
+    comp_config.statistics = [kwargs['statistic']]
+    
+    # Parse scale categories
+    scale_categories = parse_comma_separated_strings(kwargs['scale_categories'])
+    
+    # Parse HSCY3 deltaz shifts if provided
+    hscy3_deltaz_shifts = None
+    if kwargs.get('hscy3_deltaz_shifts'):
+        hscy3_deltaz_shifts = parse_comma_separated_floats(kwargs['hscy3_deltaz_shifts'])
+    
+    # Use multi-galaxy mode if multiple galaxy types, else single-galaxy mode
+    if len(lens_configs) > 1:
+        logger.info(f"Using multi-galaxy mode for {len(lens_configs)} galaxy types")
+        
+        plotter = create_multi_galaxy_plotter_from_configs(
+            comp_config, lens_configs, source_config, output_config, plot_config, analysis_config, logger
+        )
+        
+        # Generate combined plot (hscy3_deltaz_shifts not supported for multi-galaxy yet)
+        if hscy3_deltaz_shifts is not None:
+            logger.warning("hscy3_deltaz_shifts not supported for multi-galaxy plotter, ignoring")
+        
+        results = plotter.plot_source_redshift_slope_tomographic(
+            statistic=kwargs['statistic'],
+            scale_categories=scale_categories,
+            save_plot=plot_config.save_plots,
+            filename_suffix=plot_config.filename_suffix,
+            plot_slope=kwargs['plot_slope'],
+            plot_slope_uncertainty=kwargs['plot_slope_uncertainty'],
+            compute_sigma_sys=kwargs['compute_sigma_sys'],
+            sigma_sys_method=kwargs['sigma_sys_method'],
+            use_all_bins=kwargs['use_all_bins'],
+            use_theory_covariance=kwargs['use_theory_covariance'],
+            critical_sigma=kwargs['critical_sigma'],
+            slope_color=kwargs['slope_color']
+        )
+        
+        # Log summary of results
+        for key, slope in results.get('slopes', {}).items():
+            slope_err = results.get('slope_errors', {}).get(key, np.nan)
+            if np.isfinite(slope) and np.isfinite(slope_err):
+                significance = np.abs(slope) / slope_err if slope_err > 0 else 0
+                logger.info(f"  {key}: slope={slope:.3f}±{slope_err:.3f} ({significance:.1f}σ)")
+    else:
+        # Single galaxy type - create plotter for each lens config
+        for lens_config in lens_configs:
+            logger.info(f"Processing galaxy type: {lens_config.galaxy_type}")
+            
+            plotter = create_plotter_from_configs(
+                comp_config, lens_config, source_config, output_config, plot_config, analysis_config, logger
+            )
+            
+            # Generate plot
+            results = plotter.plot_source_redshift_slope_tomographic(
+                statistic=kwargs['statistic'],
+                scale_categories=scale_categories,
+                save_plot=plot_config.save_plots,
+                filename_suffix=plot_config.filename_suffix,
+                plot_slope=kwargs['plot_slope'],
+                plot_slope_uncertainty=kwargs['plot_slope_uncertainty'],
+                compute_sigma_sys=kwargs['compute_sigma_sys'],
+                sigma_sys_method=kwargs['sigma_sys_method'],
+                use_all_bins=kwargs['use_all_bins'],
+                use_theory_covariance=kwargs['use_theory_covariance'],
+                hscy3_deltaz_shifts=hscy3_deltaz_shifts,
+                critical_sigma=kwargs['critical_sigma'],
+                slope_color=kwargs['slope_color']
+            )
+            
+            # Log summary of results
+            for key, slope in results.get('slopes', {}).items():
+                slope_err = results.get('slope_errors', {}).get(key, np.nan)
+                if np.isfinite(slope) and np.isfinite(slope_err):
+                    significance = np.abs(slope) / slope_err if slope_err > 0 else 0
+                    logger.info(f"  {key}: slope={slope:.3f}±{slope_err:.3f} ({significance:.1f}σ)")
+    
+    logger.info("Source redshift slope plotting completed")
+
+
+@plot.command()
+@add_galaxy_options
+@add_source_options
+@add_output_options
+@add_plotting_options
+@click.option('--surveys-to-overlay',
+              help='Comma-separated list of surveys to overlay (e.g., "KiDS,DES,UNIONS"). '
+                   'If not specified, uses all configured source surveys plus UNIONS.')
+@click.option('--nside', type=int, default=64,
+              help='HEALPix nside parameter for map resolution')
+@click.option('--smoothing', type=float, default=0.5,
+              help='Smoothing scale in degrees for survey boundaries')
+@click.option('--sep', type=int, default=30,
+              help='Number of graticules per degree for grid')
+@click.option('--plot-ratio/--plot-density', default=False,
+              help='Plot ratio of observed/target galaxies vs density')
+@click.option('--survey-colors',
+              help='JSON-formatted dictionary of survey colors (e.g., \'{"KiDS":"blue","DES":"red"}\')')
+@click.option('--survey-alphas',
+              help='JSON-formatted dictionary of survey alpha values (e.g., \'{"UNIONS":0.9}\')')
+@click.option('--survey-label-positions',
+              help='JSON-formatted dictionary of survey label positions in degrees (e.g., \'{"KiDS":[0,60]}\')')
+@click.pass_context
+def footprint(ctx, **kwargs):
+    """Plot survey footprints on sky map with lens galaxy density."""
+    from ..analysis.plotting import create_footprint_plotter_from_configs
+    import json
+    
+    logger = ctx.obj['logger']
+    logger.info("Plotting survey footprints")
+    
+    # Check if footprint plotting is available
+    try:
+        from ..analysis.plotting import FOOTPRINT_AVAILABLE
+        if not FOOTPRINT_AVAILABLE:
+            logger.error(
+                "Footprint plotting requires skymapper and healpy packages. "
+                "Install them with: pip install skymapper healpy"
+            )
+            sys.exit(1)
+    except ImportError:
+        logger.error(
+            "Footprint plotting requires skymapper and healpy packages. "
+            "Install them with: pip install skymapper healpy"
+        )
+        sys.exit(1)
+    
+    # Create minimal configurations for footprint plotting
+    # Parse lists from strings
+    randoms = parse_comma_separated_ints(kwargs.get('randoms', '1,2'))
+    source_surveys = parse_comma_separated_strings(kwargs.get('source_surveys', 'DES,KiDS,HSCY1,HSCY3'))
+    galaxy_types = parse_comma_separated_strings(kwargs.get('galaxy_type', 'BGS_BRIGHT'))
+    
+    # Parse per-galaxy-type z-bins overrides
+    z_bins_overrides = {}
+    if kwargs.get('z_bins_bgs_bright'):
+        z_bins_overrides['BGS_BRIGHT'] = parse_comma_separated_floats(kwargs['z_bins_bgs_bright'])
+    if kwargs.get('z_bins_lrg'):
+        z_bins_overrides['LRG'] = parse_comma_separated_floats(kwargs['z_bins_lrg'])
+    if kwargs.get('z_bins_elg'):
+        z_bins_overrides['ELG'] = parse_comma_separated_floats(kwargs['z_bins_elg'])
+    
+    # Create minimal computation config (not used for footprints but required by plotter)
+    computation_config = ComputationConfig(n_jobs=1)
+    
+    # Create lens configurations for each galaxy type
+    lens_configs = []
+    for galaxy_type in galaxy_types:
+        lens_config = LensGalaxyConfig(
+            galaxy_type=galaxy_type,
+            release=kwargs.get('release', 'iron'),
+            bgs_catalogue_version=kwargs.get('bgs_version', 'v1.5'),
+            lrg_catalogue_version=kwargs.get('lrg_version', 'v1.5'),
+            elg_catalogue_version=kwargs.get('elg_version', 'v1.5'),
+            which_randoms=randoms,
+            randoms_ratio=kwargs.get('randoms_ratio', -1.0),
+            magnitude_cuts=kwargs.get('magnitude_cuts', True),
+            mstar_complete=kwargs.get('mstar_complete', False),
+        )
+        
+        # Apply per-galaxy-type z-bins override, or use defaults
+        if galaxy_type in z_bins_overrides:
+            lens_config.z_bins = z_bins_overrides[galaxy_type]
+        else:
+            lens_config.use_default_z_bins()
+        
+        lens_configs.append(lens_config)
+    
+    # Create source config
+    source_config = SourceSurveyConfig(
+        surveys=source_surveys,
+        cut_catalogues_to_desi=kwargs.get('cut_to_desi', True),
+    )
+    
+    # Create output config
+    output_config = OutputConfig(
+        catalogue_path=kwargs.get('catalogue_path', '/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/desi_catalogues/'),
+        source_catalogue_path=kwargs.get('source_catalogue_path', '/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/'),
+        save_path=kwargs.get('output_dir', '/pscratch/sd/s/sven/lensing_measurements/'),
+        save_precomputed=kwargs.get('save_precomputed', True),
+        apply_blinding=kwargs.get('apply_blinding', False),
+        verbose=ctx.obj.get('verbose', False),
+    )
+    
+    # Create plot config
+    plot_config = PlotConfig(
+        style=kwargs.get('style', 'paper'),
+        transparent_background=kwargs.get('transparent', False),
+        filename_suffix=kwargs.get('filename_suffix', ''),
+        save_plots=not kwargs.get('no_save', False),
+    )
+    
+    # Setup matplotlib style
+    try:
+        from ..analysis.plotting_utils import setup_matplotlib_style
+        setup_matplotlib_style(plot_config.style)
+    except ImportError:
+        logger.warning("Could not load plotting_utils, using default matplotlib style")
+    
+    # Parse surveys to overlay
+    surveys_to_overlay = None
+    if kwargs.get('surveys_to_overlay'):
+        surveys_to_overlay = parse_comma_separated_strings(kwargs['surveys_to_overlay'])
+    
+    # Parse JSON parameters if provided
+    colors = None
+    if kwargs.get('survey_colors'):
+        try:
+            colors = json.loads(kwargs['survey_colors'])
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON format for survey-colors")
+            sys.exit(1)
+    
+    alphas = None
+    if kwargs.get('survey_alphas'):
+        try:
+            alphas = json.loads(kwargs['survey_alphas'])
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON format for survey-alphas")
+            sys.exit(1)
+    
+    label_positions = None
+    if kwargs.get('survey_label_positions'):
+        try:
+            label_positions_raw = json.loads(kwargs['survey_label_positions'])
+            # Convert lists to tuples
+            label_positions = {k: tuple(v) for k, v in label_positions_raw.items()}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            logger.error("Invalid JSON format for survey-label-positions")
+            sys.exit(1)
+    
+    # Temporarily disable cut_to_desi to get full footprints
+    original_cut_setting = source_config.cut_catalogues_to_desi
+    source_config.cut_catalogues_to_desi = False
+    
+    # Plot for each lens galaxy type
+    for lens_config in lens_configs:
+        logger.info(f"Plotting footprint for {lens_config.galaxy_type}")
+        
+        # Create footprint plotter
+        plotter = create_footprint_plotter_from_configs(
+            computation_config, lens_config, source_config, output_config, plot_config, logger
+        )
+        
+        # Generate footprint plot
+        plotter.plot_lens_footprint(
+            surveys_to_overlay=surveys_to_overlay,
+            nside=kwargs['nside'],
+            smoothing=kwargs['smoothing'],
+            sep=kwargs['sep'],
+            colors=colors,
+            alphas=alphas,
+            label_positions=label_positions,
+            plot_ratio=kwargs['plot_ratio'],
+            save_plot=plot_config.save_plots,
+            filename_suffix=plot_config.filename_suffix
+        )
+    
+    # Restore original cut_to_desi setting
+    source_config.cut_catalogues_to_desi = original_cut_setting
+    
+    logger.info("Footprint plotting completed")
 
 
 @cli.command()
@@ -871,16 +1425,29 @@ def list_surveys():
 @randoms.command()
 @add_common_options
 @click.option('--n-randoms', type=int, default=1000, help='Number of random realizations')
-@click.option('--n-jobs', type=int, default=4, help='Number of parallel processes')
+@click.option('--n-processes', type=int, default=4, help='Number of parallel processes')
 @click.option('--use-theory-covariance/--use-jackknife', default=True,
               help='Use theory vs jackknife covariance')
 @click.option('--datavector-type', 
-              type=click.Choice(['zero', 'emulator', 'measured']),
+              type=click.Choice(['zero', 'emulator', 'chris', 'measured']),
               default='emulator', help='Type of data vector to use')
 @click.option('--filename-suffix', default='', help='Suffix for output files')
+@click.option('--use-all-bins/--use-allowed-bins', default=False,
+              help='Use all source bins vs only allowed bins per lens bin')
 @click.pass_context
 def source_redshift_slope(ctx, **kwargs):
-    """Generate random realizations for source redshift slope analysis."""
+    """Generate random realizations for source redshift slope analysis.
+    
+    For source redshift slope analysis, the entire covariance matrix including
+    cross-covariances between surveys is used to generate correlated random
+    data vectors.
+    
+    Example:
+    
+    \b
+    desi-lensing randoms source-redshift-slope --galaxy-type BGS_BRIGHT \\
+        --source-surveys KiDS,DES,HSCY3 --use-theory-covariance --n-randoms 1000
+    """
     from ..analysis.randoms import create_randoms_analyzer_from_configs
     
     logger = ctx.obj['logger']
@@ -889,35 +1456,67 @@ def source_redshift_slope(ctx, **kwargs):
     # Create configurations
     comp_config, lens_configs, source_config, output_config, _, analysis_config = create_configs_from_args(**kwargs)
     
-    # Create randoms analyzer
-    randoms_analyzer = create_randoms_analyzer_from_configs(
-        comp_config, lens_configs[0], source_config, output_config, logger
-    )
+    # Process each galaxy type
+    for lens_config in lens_configs:
+        logger.info(f"Processing galaxy type: {lens_config.galaxy_type}")
+        
+        # Create randoms analyzer for this galaxy type
+        randoms_analyzer = create_randoms_analyzer_from_configs(
+            comp_config, lens_config, source_config, output_config, logger
+        )
+        
+        # Add galaxy type to filename suffix to prevent overwriting
+        galaxy_suffix = f"_{lens_config.galaxy_type.lower()}"
+        full_suffix = f"{kwargs['filename_suffix']}{galaxy_suffix}"
+        
+        # Generate random realizations
+        randoms_analyzer.generate_random_source_redshift_slope_test(
+            n_randoms=kwargs['n_randoms'],
+            n_processes=kwargs['n_processes'],
+            use_theory_covariance=kwargs['use_theory_covariance'],
+            datavector_type=kwargs['datavector_type'],
+            filename_suffix=full_suffix,
+            use_all_bins=kwargs['use_all_bins']
+        )
+        
+        logger.info(f"Completed source redshift slope randoms for {lens_config.galaxy_type}")
     
-    # Generate random realizations
-    randoms_analyzer.generate_random_source_redshift_slope_test(
-        n_randoms=kwargs['n_randoms'],
-        n_processes=kwargs['n_jobs'],
-        use_theory_covariance=kwargs['use_theory_covariance'],
-        datavector_type=kwargs['datavector_type'],
-        filename_suffix=kwargs['filename_suffix']
-    )
-    
-    logger.info("Source redshift slope randoms generation completed")
+    logger.info("Source redshift slope randoms generation completed for all galaxy types")
 
 
 @randoms.command()
 @add_common_options
 @click.option('--n-randoms', type=int, default=1000, help='Number of random realizations')
-@click.option('--n-jobs', type=int, default=4, help='Number of parallel processes')
+@click.option('--n-processes', type=int, default=4, help='Number of parallel processes')
 @click.option('--use-theory-covariance/--use-jackknife', default=False,
               help='Use theory vs jackknife covariance')
 @click.option('--datavector-type', 
-              type=click.Choice(['zero', 'emulator', 'measured']),
+              type=click.Choice(['zero', 'emulator', 'chris', 'measured']),
               default='measured', help='Type of data vector to use')
+@click.option('--splits-to-consider',
+              default='NTILE',
+              help='Comma-separated list of split properties (e.g., "NTILE,ra,dec"). '
+                   'Overrides --split-by if provided.')
+@click.option('--scale-categories',
+              default='small scales,large scales,all scales',
+              help='Comma-separated list of scale categories')
+@click.option('--boost-correction/--no-boost-correction', default=False,
+              help='Whether boost correction was applied in splits computation')
 @click.pass_context
 def splits(ctx, **kwargs):
-    """Generate random realizations for data splits analysis."""
+    """Generate random realizations for data splits analysis.
+    
+    This generates random data vectors for each split, computes lensing
+    amplitudes, and fits slopes to assess the null distribution of slope
+    values. Results are saved with keys in format:
+    '{split_by}_{galaxy_type}_{scale_category}_{lens_bin}'
+    
+    Example:
+    
+    \b
+    desi-lensing randoms splits --galaxy-type BGS_BRIGHT \\
+        --splits-to-consider NTILE,ra,dec --n-splits 4 --n-randoms 1000
+    """
     from ..analysis.randoms import create_randoms_analyzer_from_configs
     
     logger = ctx.obj['logger']
@@ -926,20 +1525,51 @@ def splits(ctx, **kwargs):
     # Create configurations
     comp_config, lens_configs, source_config, output_config, _, analysis_config = create_configs_from_args(**kwargs)
     
-    # Create randoms analyzer
-    randoms_analyzer = create_randoms_analyzer_from_configs(
-        comp_config, lens_configs[0], source_config, output_config, logger
-    )
+    # Parse splits to consider - prefer explicit --splits-to-consider, fall back to --split-by
+    splits_to_consider = None
+    if kwargs.get('splits_to_consider'):
+        splits_to_consider = parse_comma_separated_strings(kwargs['splits_to_consider'])
+    elif comp_config.split_by:
+        splits_to_consider = comp_config.split_by
     
-    # Generate random realizations
-    randoms_analyzer.generate_random_splits_test(
-        n_randoms=kwargs['n_randoms'],
-        n_processes=kwargs['n_jobs'],
-        use_theory_covariance=kwargs['use_theory_covariance'],
-        datavector_type=kwargs['datavector_type']
-    )
+    # Parse scale categories
+    scale_categories = None
+    if kwargs.get('scale_categories'):
+        scale_categories = parse_comma_separated_strings(kwargs['scale_categories'])
     
-    logger.info("Splits randoms generation completed")
+    if splits_to_consider:
+        logger.info(f"Generating randoms for splits: {splits_to_consider}")
+    else:
+        logger.info("No splits specified, using default: ['NTILE']")
+    
+    # Process each galaxy type
+    for lens_config in lens_configs:
+        logger.info(f"Processing galaxy type: {lens_config.galaxy_type}")
+        
+        # Create randoms analyzer for this galaxy type
+        randoms_analyzer = create_randoms_analyzer_from_configs(
+            comp_config, lens_config, source_config, output_config, logger
+        )
+        
+        # Add galaxy type to filename suffix to prevent overwriting
+        galaxy_suffix = f"_{lens_config.galaxy_type.lower()}"
+        
+        # Generate random realizations
+        randoms_analyzer.generate_random_splits_test(
+            n_randoms=kwargs['n_randoms'],
+            n_processes=kwargs['n_processes'],
+            use_theory_covariance=kwargs['use_theory_covariance'],
+            datavector_type=kwargs['datavector_type'],
+            splits_to_consider=splits_to_consider,
+            scale_categories=scale_categories,
+            n_splits=comp_config.n_splits,
+            boost_correction=kwargs['boost_correction'],
+            filename_suffix=galaxy_suffix
+        )
+        
+        logger.info(f"Completed splits randoms for {lens_config.galaxy_type}")
+    
+    logger.info("Splits randoms generation completed for all galaxy types")
 
 
 def main():

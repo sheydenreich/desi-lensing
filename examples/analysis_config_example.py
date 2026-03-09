@@ -65,19 +65,21 @@ def create_example_analysis_config():
         )
     
     # Update allowed bins - make BGS_BRIGHT more conservative for KiDS
+    # BGS_BRIGHT bin 0 has z_max=0.20 (z_bins=[0.1, 0.2, 0.3, 0.4])
     analysis_config.update_allowed_bins(
         galaxy_type="BGS_BRIGHT",
         source_survey="KiDS", 
-        lens_bin=0,
+        z_max=0.20,
         allowed_bins=[4],  # Only highest-z source bin
         conservative=True
     )
     
     # Make LRG analysis more permissive for DES
+    # LRG bin 0 has z_max=0.60 (z_bins=[0.4, 0.6, 0.8, 1.1])
     analysis_config.update_allowed_bins(
         galaxy_type="LRG",
         source_survey="DES",
-        lens_bin=0,
+        z_max=0.60,
         allowed_bins=[1, 2, 3],  # Allow more source bins
         conservative=False
     )
@@ -104,18 +106,23 @@ def demonstrate_survey_dependent_settings():
             print(f"{survey:<10} {cuts['min_deg']:<12.6f} {cuts['max_deg']:<12.2f} {cuts['rp_pivot']:<10.1f}")
     
     print("\n=== Allowed Source-Lens Bin Combinations ===")
-    galaxy_types = ["BGS_BRIGHT", "LRG"]
+    # z_max values for each galaxy type's lens bins
+    galaxy_z_maxs = {
+        "BGS_BRIGHT": [0.20, 0.30, 0.40],  # z_bins=[0.1, 0.2, 0.3, 0.4]
+        "LRG": [0.60, 0.80, 1.10],          # z_bins=[0.4, 0.6, 0.8, 1.1]
+    }
     
-    for galaxy_type in galaxy_types:
+    for galaxy_type, z_maxs in galaxy_z_maxs.items():
         print(f"\n{galaxy_type}:")
-        print(f"{'Survey':<10} {'Lens Bin 0':<15} {'Lens Bin 1':<15} {'Lens Bin 2':<15}")
+        headers = [f"z<{z:.2f}" for z in z_maxs]
+        print(f"{'Survey':<10} {headers[0]:<15} {headers[1]:<15} {headers[2]:<15}")
         print("-" * 70)
         
         for survey in surveys:
             bins_str = []
-            for lens_bin in range(3):
+            for z_max in z_maxs:
                 allowed = analysis_config.get_allowed_source_bins(
-                    galaxy_type, survey, lens_bin, conservative_cut=True
+                    galaxy_type, survey, z_max, conservative_cut=True
                 )
                 bins_str.append(str(allowed) if allowed else "[]")
             
@@ -216,16 +223,18 @@ def demonstrate_programmatic_updates():
     # Scenario: Disable certain source-lens combinations
     print("\nDisabling high-redshift LRG - low-redshift source combinations...")
     
+    # LRG highest-z bin has z_max=1.10 (z_bins=[0.4, 0.6, 0.8, 1.1])
+    lrg_z_max_highest = 1.10
     for survey in ["DES", "KiDS", "HSCY1", "HSCY3"]:
-        # Make LRG bin 2 (highest-z) use only highest-z source bins
-        current_bins = analysis_config.get_allowed_source_bins("LRG", survey, 2)
+        # Make LRG highest-z bin use only highest-z source bins
+        current_bins = analysis_config.get_allowed_source_bins("LRG", survey, lrg_z_max_highest)
         if current_bins:
             # Keep only the highest available source bin
             conservative_bins = [max(current_bins)] if current_bins else []
             analysis_config.update_allowed_bins(
-                "LRG", survey, 2, conservative_bins, conservative=True
+                "LRG", survey, lrg_z_max_highest, conservative_bins, conservative=True
             )
-            print(f"  LRG bin 2 + {survey}: {current_bins} -> {conservative_bins}")
+            print(f"  LRG z<{lrg_z_max_highest:.2f} + {survey}: {current_bins} -> {conservative_bins}")
 
 
 def validate_configuration():

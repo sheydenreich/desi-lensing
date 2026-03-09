@@ -53,6 +53,10 @@ class ComputationConfig(BaseConfig):
     # Tomography
     tomography: bool = True
     
+    # Splits configuration
+    split_by: Optional[List[str]] = None  # Properties to split by (e.g., ["NTILE", "LOGMSTAR"])
+    n_splits: int = 4  # Number of splits to create
+    
     def __post_init__(self):
         """Post-initialization to set defaults based on GPU usage."""
         if self.force_shared is None:
@@ -107,6 +111,10 @@ class ComputationConfig(BaseConfig):
         # Validate n_jackknife_fields
         if self.n_jackknife_fields < 2:
             errors.append("n_jackknife_fields must be at least 2")
+        
+        # Validate splits parameters
+        if self.n_splits < 2:
+            errors.append("n_splits must be at least 2")
         
         return errors
     

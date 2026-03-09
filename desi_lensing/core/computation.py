@@ -86,6 +86,7 @@ class LensingComputation(BaseComputation):
             **kwargs
         }
         
+        self.logger.info(f"Precompute kwargs: {precompute_kwargs}")
         # Precompute for lenses
         if table_s is not None:
             precompute(table_l, table_s, bins, weighting=weighting, **precompute_kwargs)
@@ -177,7 +178,7 @@ class LensingComputation(BaseComputation):
             raise ValueError(f"Unknown statistic: {self.statistic_name}")
         
         self.logger.info(kwargs)
-        self.logger.info(result['ds'])
+        # self.logger.info(result['ds'])
         # Compute covariance matrix
         stacking_kwargs['return_table'] = False
         try:

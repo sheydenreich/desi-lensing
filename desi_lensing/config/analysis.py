@@ -56,75 +56,81 @@ class AnalysisConfig(BaseConfig):
     })
     
     # Allowed source-lens bin combinations
+    # Keys use the upper edge of the lens redshift bin (z_max) for stability
+    # across different binning schemes (e.g., BGS_BRIGHT 3-bin vs 1-bin).
+    # Format: {galaxy_type}_z{z_max:.2f}
+    # BGS_BRIGHT bins: [0.1, 0.2, 0.3, 0.4] -> z_max = 0.20, 0.30, 0.40
+    # LRG bins: [0.4, 0.6, 0.8, 1.1] -> z_max = 0.60, 0.80, 1.10
+    #
     # Conservative cuts (more restrictive)
     allowed_bins_conservative: Dict[str, Dict[str, List[int]]] = field(default_factory=lambda: {
         "KiDS": {
-            "BGS_BRIGHT_l0": [3, 4], "BGS_BRIGHT_l1": [3, 4], "BGS_BRIGHT_l2": [3, 4],
-            "LRG_l0": [3, 4], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [3, 4], "BGS_BRIGHT_z0.30": [3, 4], "BGS_BRIGHT_z0.40": [3, 4],
+            "LRG_z0.60": [3, 4], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DES": {
-            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
-            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [2, 3], "BGS_BRIGHT_z0.30": [2, 3], "BGS_BRIGHT_z0.40": [2, 3],
+            "LRG_z0.60": [3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DECADE": {
-            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
-            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [2, 3], "BGS_BRIGHT_z0.30": [2, 3], "BGS_BRIGHT_z0.40": [2, 3],
+            "LRG_z0.60": [3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DECADE_NGC": {
-            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
-            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [2, 3], "BGS_BRIGHT_z0.30": [2, 3], "BGS_BRIGHT_z0.40": [2, 3],
+            "LRG_z0.60": [3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DECADE_SGC": {
-            "BGS_BRIGHT_l0": [2, 3], "BGS_BRIGHT_l1": [2, 3], "BGS_BRIGHT_l2": [2, 3],
-            "LRG_l0": [3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [2, 3], "BGS_BRIGHT_z0.30": [2, 3], "BGS_BRIGHT_z0.40": [2, 3],
+            "LRG_z0.60": [3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "HSCY1": {
-            "BGS_BRIGHT_l0": [1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [1, 2, 3], "LRG_l1": [2, 3], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [1, 2, 3], "BGS_BRIGHT_z0.30": [1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [1, 2, 3], "LRG_z0.80": [2, 3], "LRG_z1.10": []
         },
         "HSCY3": {
-            "BGS_BRIGHT_l0": [1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [2, 3], "LRG_l1": [2, 3], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [1, 2, 3], "BGS_BRIGHT_z0.30": [1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [2, 3], "LRG_z0.80": [2, 3], "LRG_z1.10": []
         },
         "SDSS": {
-            "BGS_BRIGHT_l0": [0], "BGS_BRIGHT_l1": [0], "BGS_BRIGHT_l2": [0],
-            "LRG_l0": [], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [0], "BGS_BRIGHT_z0.30": [0], "BGS_BRIGHT_z0.40": [0],
+            "LRG_z0.60": [], "LRG_z0.80": [], "LRG_z1.10": []
         }
     })
     
     # Less conservative cuts (more permissive)
     allowed_bins_less_conservative: Dict[str, Dict[str, List[int]]] = field(default_factory=lambda: {
         "KiDS": {
-            "BGS_BRIGHT_l0": [1, 2, 3, 4], "BGS_BRIGHT_l1": [2, 3, 4], "BGS_BRIGHT_l2": [3, 4],
-            "LRG_l0": [3, 4], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [1, 2, 3, 4], "BGS_BRIGHT_z0.30": [2, 3, 4], "BGS_BRIGHT_z0.40": [3, 4],
+            "LRG_z0.60": [3, 4], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DES": {
-            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [0, 1, 2, 3], "BGS_BRIGHT_z0.30": [1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [2, 3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DECADE": {
-            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [0, 1, 2, 3], "BGS_BRIGHT_z0.30": [1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [2, 3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DECADE_NGC": {
-            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [0, 1, 2, 3], "BGS_BRIGHT_z0.30": [1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [2, 3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "DECADE_SGC": {
-            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [2, 3], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [0, 1, 2, 3], "BGS_BRIGHT_z0.30": [1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [2, 3], "LRG_z0.80": [], "LRG_z1.10": []
         },
         "HSCY1": {
-            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [0, 1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [1, 2, 3], "LRG_l1": [2, 3], "LRG_l2": [3]
+            "BGS_BRIGHT_z0.20": [0, 1, 2, 3], "BGS_BRIGHT_z0.30": [0, 1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [1, 2, 3], "LRG_z0.80": [2, 3], "LRG_z1.10": [3]
         },
         "HSCY3": {
-            "BGS_BRIGHT_l0": [0, 1, 2, 3], "BGS_BRIGHT_l1": [0, 1, 2, 3], "BGS_BRIGHT_l2": [1, 2, 3],
-            "LRG_l0": [1, 2, 3], "LRG_l1": [2, 3], "LRG_l2": [3]
+            "BGS_BRIGHT_z0.20": [0, 1, 2, 3], "BGS_BRIGHT_z0.30": [0, 1, 2, 3], "BGS_BRIGHT_z0.40": [1, 2, 3],
+            "LRG_z0.60": [1, 2, 3], "LRG_z0.80": [2, 3], "LRG_z1.10": [3]
         },
         "SDSS": {
-            "BGS_BRIGHT_l0": [0], "BGS_BRIGHT_l1": [0], "BGS_BRIGHT_l2": [0],
-            "LRG_l0": [], "LRG_l1": [], "LRG_l2": []
+            "BGS_BRIGHT_z0.20": [0], "BGS_BRIGHT_z0.30": [0], "BGS_BRIGHT_z0.40": [0],
+            "LRG_z0.60": [], "LRG_z0.80": [], "LRG_z1.10": []
         }
     })
     
@@ -136,6 +142,16 @@ class AnalysisConfig(BaseConfig):
     analyzed_scales: List[str] = field(default_factory=lambda: [
         "small scales", "large scales", "all scales"
     ])
+    
+    # NTILE split configuration per galaxy type
+    # n_ntile_* is the total number of NTILE splits
+    # n_ntile_computed_* is how many were actually computed (may be less)
+    ntile_splits: Dict[str, int] = field(default_factory=lambda: {
+        "n_ntile_bgs": 4,           # Total NTILE splits for BGS
+        "n_ntile_computed_bgs": 4,   # Computed NTILE splits for BGS
+        "n_ntile_lrg": 3,           # Total NTILE splits for LRG  
+        "n_ntile_computed_lrg": 3,   # Computed NTILE splits for LRG
+    })
     
     def validate(self) -> List[str]:
         """Validate analysis configuration."""
@@ -209,6 +225,21 @@ class AnalysisConfig(BaseConfig):
         elif not all(isinstance(x, str) for x in self.analyzed_scales):
             errors.append("analyzed_scales must be a list of strings")
         
+        # Validate NTILE splits configuration
+        if not isinstance(self.ntile_splits, dict):
+            errors.append("ntile_splits must be a dictionary")
+        else:
+            for key, value in self.ntile_splits.items():
+                if not isinstance(value, int) or value <= 0:
+                    errors.append(f"ntile_splits['{key}'] must be a positive integer, got {value}")
+                # Check that computed <= total
+                if key.startswith("n_ntile_computed_"):
+                    gtype = key.replace("n_ntile_computed_", "")
+                    total_key = f"n_ntile_{gtype}"
+                    if total_key in self.ntile_splits:
+                        if value > self.ntile_splits[total_key]:
+                            errors.append(f"n_ntile_computed_{gtype} ({value}) cannot exceed n_ntile_{gtype} ({self.ntile_splits[total_key]})")
+        
         return errors
     
     def get_scale_cuts(self, survey: str, statistic: str = "deltasigma") -> Dict[str, float]:
@@ -243,15 +274,71 @@ class AnalysisConfig(BaseConfig):
         
         return self.scale_cuts[survey][statistic].copy()
     
+    @staticmethod
+    def _make_z_key(galaxy_type: str, z_max: float) -> str:
+        """Create a z_max-based key for allowed bins lookup.
+        
+        Parameters
+        ----------
+        galaxy_type : str
+            Lens galaxy type (e.g., "BGS_BRIGHT", "LRG")
+        z_max : float
+            Upper edge of the lens redshift bin
+            
+        Returns
+        -------
+        str
+            Key string, e.g. "BGS_BRIGHT_z0.40"
+        """
+        return f"{galaxy_type}_z{z_max:.2f}"
+    
+    def _find_z_key(self, galaxy_type: str, z_max: float, survey_dict: Dict[str, List[int]]) -> Optional[str]:
+        """Find the matching z_max key in a survey dictionary, with floating-point tolerance.
+        
+        First tries an exact formatted match. If that fails, iterates over keys
+        for the given galaxy_type and finds one within atol=0.01.
+        
+        Parameters
+        ----------
+        galaxy_type : str
+            Lens galaxy type
+        z_max : float
+            Upper edge of the lens redshift bin
+        survey_dict : Dict[str, List[int]]
+            The per-survey dictionary of allowed bins
+            
+        Returns
+        -------
+        Optional[str]
+            The matching key, or None if no match found
+        """
+        # Try exact formatted match first
+        bin_key = self._make_z_key(galaxy_type, z_max)
+        if bin_key in survey_dict:
+            return bin_key
+        
+        # Fallback: fuzzy match on z_max for floating-point robustness
+        prefix = f"{galaxy_type}_z"
+        for key in survey_dict:
+            if key.startswith(prefix):
+                try:
+                    key_z = float(key[len(prefix):])
+                    if abs(key_z - z_max) < 0.01:
+                        return key
+                except ValueError:
+                    continue
+        
+        return None
+    
     def get_allowed_source_bins(
         self, 
         galaxy_type: str, 
         source_survey: str, 
-        lens_bin: int, 
+        z_max: float, 
         conservative_cut: Optional[bool] = None
     ) -> List[int]:
         """
-        Get allowed source bins for a given lens bin, galaxy type, and survey.
+        Get allowed source bins for a given lens redshift bin upper edge, galaxy type, and survey.
         
         Parameters
         ----------
@@ -259,8 +346,10 @@ class AnalysisConfig(BaseConfig):
             Lens galaxy type ("BGS_BRIGHT", "LRG", "ELG")
         source_survey : str
             Source survey name
-        lens_bin : int
-            Lens redshift bin index (0-based)
+        z_max : float
+            Upper edge of the lens redshift bin (e.g. 0.2 for BGS bin 1,
+            0.6 for LRG bin 1). This is stable across different binning
+            schemes (e.g. BGS 3-bin vs 1-bin).
         conservative_cut : bool, optional
             Whether to use conservative cuts. If None, uses self.use_conservative_cuts
             
@@ -275,14 +364,14 @@ class AnalysisConfig(BaseConfig):
         # Choose the appropriate cuts dictionary
         cuts_dict = self.allowed_bins_conservative if conservative_cut else self.allowed_bins_less_conservative
         
-        # Construct the key
+        # Look up survey
         survey_key = source_survey.upper()
-        bin_key = f"{galaxy_type}_l{lens_bin}"
-        
         if survey_key not in cuts_dict:
             return []
         
-        if bin_key not in cuts_dict[survey_key]:
+        # Find matching key with floating-point tolerance
+        bin_key = self._find_z_key(galaxy_type, z_max, cuts_dict[survey_key])
+        if bin_key is None:
             return []
         
         return cuts_dict[survey_key][bin_key].copy()
@@ -327,7 +416,7 @@ class AnalysisConfig(BaseConfig):
         self,
         galaxy_type: str,
         source_survey: str,
-        lens_bin: int,
+        z_max: float,
         allowed_bins: List[int],
         conservative: bool = True
     ) -> None:
@@ -340,8 +429,8 @@ class AnalysisConfig(BaseConfig):
             Lens galaxy type
         source_survey : str
             Source survey name
-        lens_bin : int
-            Lens bin index
+        z_max : float
+            Upper edge of the lens redshift bin
         allowed_bins : List[int]
             List of allowed source bin indices
         conservative : bool
@@ -350,7 +439,7 @@ class AnalysisConfig(BaseConfig):
         cuts_dict = self.allowed_bins_conservative if conservative else self.allowed_bins_less_conservative
         
         survey_key = source_survey.upper()
-        bin_key = f"{galaxy_type}_l{lens_bin}"
+        bin_key = self._make_z_key(galaxy_type, z_max)
         
         if survey_key not in cuts_dict:
             cuts_dict[survey_key] = {}
@@ -433,6 +522,58 @@ class AnalysisConfig(BaseConfig):
             Total number of bins
         """
         return sum(self.get_n_bins_for_galaxy_type(gt) for gt in galaxy_types)
+    
+    def get_ntile_n_splits(self, galaxy_type: str, computed_only: bool = False) -> int:
+        """
+        Get number of NTILE splits for a galaxy type.
+        
+        Parameters
+        ----------
+        galaxy_type : str
+            Galaxy type ("BGS_BRIGHT", "LRG", etc.)
+        computed_only : bool
+            If True, return only the number of computed splits
+            
+        Returns
+        -------
+        int
+            Number of NTILE splits
+        """
+        gtype_short = galaxy_type[:3].lower()
+        
+        if computed_only:
+            key = f"n_ntile_computed_{gtype_short}"
+        else:
+            key = f"n_ntile_{gtype_short}"
+        
+        return self.ntile_splits.get(key, 4)
+    
+    def set_ntile_n_splits(
+        self, 
+        galaxy_type: str, 
+        n_splits: int, 
+        computed_only: bool = False
+    ) -> None:
+        """
+        Set number of NTILE splits for a galaxy type.
+        
+        Parameters
+        ----------
+        galaxy_type : str
+            Galaxy type
+        n_splits : int
+            Number of NTILE splits
+        computed_only : bool
+            If True, set the computed splits count
+        """
+        gtype_short = galaxy_type[:3].lower()
+        
+        if computed_only:
+            key = f"n_ntile_computed_{gtype_short}"
+        else:
+            key = f"n_ntile_{gtype_short}"
+        
+        self.ntile_splits[key] = n_splits
     
     def get_bin_layout_for_galaxy_types(self, galaxy_types: List[str]) -> Dict[str, Tuple[int, int]]:
         """

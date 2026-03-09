@@ -1,7 +1,7 @@
 """Output configuration for lensing pipeline."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Union
 from pathlib import Path
 import os
 import re
@@ -624,11 +624,142 @@ class OutputConfig(BaseConfig):
             if filepath.exists():
                 return Table.read(str(filepath))
             else:
-                self.logger.warning(f"Results file not found: {filepath}")
-                return None
+                fallback_path = Path(str(filepath).replace("magnitude_cut/", ""))
+                if galaxy_type == "LRG" and fallback_path.exists():
+                    self.logger.info("Loading LRG results without magnitude cuts")
+                    return Table.read(str(fallback_path))
+                else:
+                    self.logger.warning(f"Results file not found: {filepath}")
+                    return None
                 
         except Exception as e:
             self.logger.error(f"Error loading results: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def load_theory_covariance(
+        self,
+        galaxy_type: str,
+        source_survey: str,
+        statistic: str = "deltasigma",
+        pure_noise: bool = False,
+        theory_cov_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/model_inputs_desiy3",
+        z_bins: Optional[List[float]] = None
+    ) -> Optional[np.ndarray]:
+        """
+        Load theory covariance matrix from Chris Hirata's files.
+        
+        Theory covariances are only available for tomographic measurements,
+        not non-tomographic. They combine all lens and source bins.
+        
+        Parameters
+        ----------
+        galaxy_type : str
+            Type of lens galaxies (e.g., 'BGS_BRIGHT', 'LRG')
+        source_survey : str
+            Source survey name (e.g., 'KiDS', 'DES', 'HSCY3', 'DECADE')
+        statistic : str
+            Statistic type ('deltasigma' or 'gammat')
+        pure_noise : bool
+            Whether to load B-mode/noise covariance
+        theory_cov_path : str
+            Path to theory covariance files
+        z_bins : Optional[List[float]]
+            Redshift bin edges. For BGS, if z_bins == [0.1, 0.4] (single k-bin),
+            uses 'bkp1' covariance files instead of standard 'bgs' files.
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            Theory covariance matrix, or None if not available
+        """
+        # Map galaxy types
+        if galaxy_type.upper() in ["BGS", "BGS_BRIGHT"]:
+            # Check if using single k-bin (z_bins = [0.1, 0.4]) vs standard 3-bin
+            # Use robust check that works with lists and numpy arrays
+            is_kbin = (
+                z_bins is not None 
+                and len(z_bins) == 2 
+                and np.allclose(z_bins, [0.1, 0.4], atol=1e-6)
+            )
+            if is_kbin:
+                fgal = "bkp1"
+            else:
+                fgal = "bgs"
+        elif galaxy_type.upper() in ["LRG"]:
+            fgal = "lrg"
+        else:
+            self.logger.warning(f"Unknown galaxy type {galaxy_type} for theory covariance")
+            return None
+        
+        # Map source surveys (case-insensitive)
+        source_lower = source_survey.lower()
+        if source_lower == "kids":
+            fsurv = "kids1000"
+        elif source_lower == "des":
+            fsurv = "desy3"
+        elif source_lower == "hscy1":
+            fsurv = "hscy1"
+        elif source_lower == "hscy3":
+            fsurv = "hscy3"
+        elif source_lower == "decade":
+            fsurv = "decade"
+        elif source_lower in ["decade_ngc", "decade_sgc"]:
+            # No theory covariance available for NGC/SGC splits
+            self.logger.info(f"No theory covariance available for {source_survey}, will use jackknife")
+            return None
+        elif source_lower in ["all", "all_y3"]:
+            # Combined surveys for Y3
+            fsurv = "kids1000desy3hscy3decade_"
+        else:
+            self.logger.warning(f"Unknown source survey {source_survey} for theory covariance")
+            return None
+        
+        # Map statistics with pure_noise flag
+        if statistic == "deltasigma":
+            if pure_noise:
+                fstat = "dx"
+            else:
+                fstat = "ds"
+            suffix = "_pzwei"
+        elif statistic == "gammat":
+            if pure_noise:
+                fstat = "gx"
+            else:
+                fstat = "gt"
+            suffix = ""
+        else:
+            self.logger.warning(f"Unknown statistic {statistic} for theory covariance")
+            return None
+        
+        # Build filepath
+        filename = f"{fstat}covcorr_{fsurv}desiy3{fgal}{suffix}.dat"
+        filepath = Path(theory_cov_path) / filename
+        
+        try:
+            if filepath.exists():
+                # Load covariance: format has extra columns, we need the last one reshaped
+                data = np.loadtxt(str(filepath), skiprows=1)
+                
+                # The data format has multiple columns; the last column contains the covariance values
+                # We need to determine the size and reshape
+                cov_values = data[:, -1]
+                n = int(np.sqrt(len(cov_values)))
+                
+                if n * n != len(cov_values):
+                    self.logger.error(f"Covariance matrix from {filepath} is not square: {len(cov_values)} elements")
+                    return None
+                
+                cov_matrix = cov_values.reshape(n, n)
+                self.logger.info(f"Loaded theory covariance from {filepath} (shape: {cov_matrix.shape})")
+                return cov_matrix
+            else:
+                self.logger.info(f"Theory covariance file not found: {filepath}")
+                return None
+                
+        except Exception as e:
+            self.logger.warning(f"Error loading theory covariance from {filepath}: {e}")
             return None
     
     def load_covariance_matrix(
@@ -687,7 +818,12 @@ class OutputConfig(BaseConfig):
             if filepath.exists():
                 return np.loadtxt(str(filepath))
             else:
-                self.logger.warning(f"Covariance file not found: {filepath}")
+                fallback_path = Path(str(filepath).replace("magnitude_cut/", ""))
+                if galaxy_type == "LRG" and fallback_path.exists():
+                    self.logger.info("Loading LRG covariance without magnitude cuts")
+                    return np.loadtxt(str(fallback_path))
+                else:
+                    self.logger.warning(f"Covariance file not found: {filepath}")
                 return None
                 
         except Exception as e:
@@ -706,7 +842,8 @@ class OutputConfig(BaseConfig):
         split_by: Optional[str] = None,
         split: Optional[int] = None,
         n_splits: int = 4,
-        n_rp_bins: int = 15
+        n_rp_bins: int = 15,
+        use_theory_covariance: bool = True
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Load tomographic data and covariance for all lens-source bin combinations.
@@ -735,6 +872,8 @@ class OutputConfig(BaseConfig):
             Total number of splits
         n_rp_bins : int
             Number of radial bins (fallback for placeholder data)
+        use_theory_covariance : bool
+            Whether to try loading theory covariance (default True)
             
         Returns
         -------
@@ -747,19 +886,30 @@ class OutputConfig(BaseConfig):
             
             n_lens_bins = len(z_bins) - 1
             
+            # Try to load theory covariance first (only for tomographic, not splits)
+            theory_cov = None
+            if use_theory_covariance and split_by is None:
+                theory_cov = self.load_theory_covariance(
+                    galaxy_type, source_survey, statistic, pure_noise, z_bins=z_bins
+                )
+            
             for lens_bin in range(n_lens_bins):
                 for source_bin in range(n_source_bins):
-                    # Load individual measurement and covariance
+                    # Load individual measurement
                     results = self.load_lensing_results(
                         version, galaxy_type, source_survey, lens_bin, z_bins,
                         statistic, source_bin, pure_noise, split_by, split, n_splits
                     )
-                    cov = self.load_covariance_matrix(
-                        version, galaxy_type, source_survey, lens_bin, z_bins,
-                        statistic, source_bin, pure_noise, split_by, split, n_splits
-                    )
                     
-                    if results is not None and cov is not None:
+                    # Load covariance (jackknife if theory not available)
+                    if theory_cov is None:
+                        cov = self.load_covariance_matrix(
+                            version, galaxy_type, source_survey, lens_bin, z_bins,
+                            statistic, source_bin, pure_noise, split_by, split, n_splits
+                        )
+                        covariances.append(cov if cov is not None else np.eye(n_rp_bins) * 0.01**2)
+                    
+                    if results is not None:
                         # Extract signal values
                         if statistic == "deltasigma":
                             signal = results['ds'] if 'ds' in results.columns else results[results.columns[1]]
@@ -767,16 +917,20 @@ class OutputConfig(BaseConfig):
                             signal = results['et'] if 'et' in results.columns else results[results.columns[1]]
                         
                         measurements.append(signal)
-                        covariances.append(cov)
                     else:
                         # Generate placeholder data if files don't exist
                         self.logger.warning(f"Missing data for {galaxy_type} {source_survey} lens:{lens_bin} source:{source_bin}, using placeholder")
                         measurements.append(np.random.randn(n_rp_bins) * 0.01)
-                        covariances.append(np.eye(n_rp_bins) * 0.01**2)
             
             # Combine measurements and covariances
             combined_data = np.concatenate(measurements)
-            combined_cov = self._combine_covariance_blocks(covariances)
+            
+            if theory_cov is not None:
+                # Use theory covariance (already combined for all bins)
+                combined_cov = theory_cov
+            else:
+                # Use jackknife covariances (need to combine blocks)
+                combined_cov = self._combine_covariance_blocks(covariances)
             
             return combined_data, combined_cov
             
@@ -924,4 +1078,460 @@ class OutputConfig(BaseConfig):
     
     def get_magnification_bias_file(self, version: str) -> Path:
         """Get the magnification bias file path."""
-        return Path(self.magnification_bias_path) / version / "DESI_magnification_bias.json" 
+        return Path(self.magnification_bias_path) / version / "DESI_magnification_bias.json"
+    
+    def get_splits_directory(
+        self,
+        version: str,
+        source_survey: str
+    ) -> Path:
+        """
+        Get the directory containing split results.
+        
+        Parameters
+        ----------
+        version : str
+            Catalogue version
+        source_survey : str
+            Source survey name
+            
+        Returns
+        -------
+        Path
+            Path to splits directory
+        """
+        return Path(self.save_path) / version / "splits" / source_survey
+    
+    def get_splits_filepath(
+        self,
+        version: str,
+        galaxy_type: str,
+        source_survey: str,
+        lens_bin: int,
+        z_bins: List[float],
+        statistic: str,
+        split_by: str,
+        split: int,
+        n_splits: int,
+        boost_correction: bool = False,
+        file_type: str = "measurement"
+    ) -> Path:
+        """
+        Get the filepath for split analysis results.
+        
+        This generates paths consistent with SplitsAnalyzer._save_split_results().
+        
+        Parameters
+        ----------
+        version : str
+            Catalogue version
+        galaxy_type : str
+            Type of lens galaxies
+        source_survey : str
+            Source survey name
+        lens_bin : int
+            Lens redshift bin index
+        z_bins : List[float]
+            Redshift bin edges
+        statistic : str
+            Statistic type ('deltasigma' or 'gammat')
+        split_by : str
+            Property used for splitting (e.g., 'NTILE', 'ra', 'dec')
+        split : int
+            Split index (0 to n_splits-1)
+        n_splits : int
+            Total number of splits
+        boost_correction : bool
+            Whether boost correction was applied
+        file_type : str
+            Type of file: 'measurement', 'covariance', 'split_value'
+            
+        Returns
+        -------
+        Path
+            Complete filepath
+        """
+        z_min = z_bins[lens_bin]
+        z_max = z_bins[lens_bin + 1]
+        
+        # Base filename format (matches SplitsAnalyzer._save_split_results)
+        filename_base = (
+            f"{statistic}_{galaxy_type}_zmin_{z_min}_zmax_{z_max}_"
+            f"blindA_boost_{boost_correction}_split_{split_by}_{split}_of_{n_splits}"
+        )
+        
+        if file_type == "measurement":
+            filename = f"{filename_base}.fits"
+        elif file_type == "covariance":
+            filename = f"covariance_{filename_base}.dat"
+        elif file_type == "split_value":
+            filename = f"split_value_{filename_base}.txt"
+        else:
+            raise ValueError(f"Unknown file_type: {file_type}")
+        
+        splits_dir = self.get_splits_directory(version, source_survey)
+        return splits_dir / filename
+    
+    def load_split_results(
+        self,
+        version: str,
+        galaxy_type: str,
+        source_survey: str,
+        lens_bin: int,
+        z_bins: List[float],
+        statistic: str,
+        split_by: str,
+        split: int,
+        n_splits: int,
+        boost_correction: bool = False
+    ) -> Optional[Table]:
+        """
+        Load split analysis results for a given configuration.
+        
+        Parameters
+        ----------
+        version : str
+            Catalogue version
+        galaxy_type : str
+            Type of lens galaxies
+        source_survey : str
+            Source survey name
+        lens_bin : int
+            Lens redshift bin index
+        z_bins : List[float]
+            Redshift bin edges
+        statistic : str
+            Statistic type
+        split_by : str
+            Property used for splitting
+        split : int
+            Split index
+        n_splits : int
+            Total number of splits
+        boost_correction : bool
+            Whether boost correction was applied
+            
+        Returns
+        -------
+        Optional[Table]
+            Loaded results table, or None if file not found
+        """
+        try:
+            filepath = self.get_splits_filepath(
+                version, galaxy_type, source_survey, lens_bin, z_bins,
+                statistic, split_by, split, n_splits, boost_correction,
+                file_type="measurement"
+            )
+            
+            if filepath.exists():
+                return Table.read(str(filepath))
+            else:
+                self.logger.warning(f"Split results file not found: {filepath}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error loading split results: {e}")
+            return None
+    
+    def load_split_covariance(
+        self,
+        version: str,
+        galaxy_type: str,
+        source_survey: str,
+        lens_bin: int,
+        z_bins: List[float],
+        statistic: str,
+        split_by: str,
+        split: int,
+        n_splits: int,
+        boost_correction: bool = False
+    ) -> Optional[np.ndarray]:
+        """
+        Load covariance matrix for split analysis.
+        
+        Parameters
+        ----------
+        version : str
+            Catalogue version
+        galaxy_type : str
+            Type of lens galaxies
+        source_survey : str
+            Source survey name
+        lens_bin : int
+            Lens redshift bin index
+        z_bins : List[float]
+            Redshift bin edges
+        statistic : str
+            Statistic type
+        split_by : str
+            Property used for splitting
+        split : int
+            Split index
+        n_splits : int
+            Total number of splits
+        boost_correction : bool
+            Whether boost correction was applied
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            Loaded covariance matrix, or None if file not found
+        """
+        try:
+            filepath = self.get_splits_filepath(
+                version, galaxy_type, source_survey, lens_bin, z_bins,
+                statistic, split_by, split, n_splits, boost_correction,
+                file_type="covariance"
+            )
+            
+            if filepath.exists():
+                return np.loadtxt(str(filepath))
+            else:
+                self.logger.warning(f"Split covariance file not found: {filepath}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error loading split covariance: {e}")
+            return None
+    
+    def load_split_value(
+        self,
+        version: str,
+        galaxy_type: str,
+        source_survey: str,
+        lens_bin: int,
+        z_bins: List[float],
+        statistic: str,
+        split_by: str,
+        split: int,
+        n_splits: int,
+        boost_correction: bool = False
+    ) -> Optional[Tuple[float, float, float]]:
+        """
+        Load split value statistics (mean, min, max) for a given split.
+        
+        The split value file contains the weighted average, minimum, and maximum
+        of the split property for galaxies in this split.
+        
+        Parameters
+        ----------
+        version : str
+            Catalogue version
+        galaxy_type : str
+            Type of lens galaxies
+        source_survey : str
+            Source survey name
+        lens_bin : int
+            Lens redshift bin index
+        z_bins : List[float]
+            Redshift bin edges
+        statistic : str
+            Statistic type
+        split_by : str
+            Property used for splitting
+        split : int
+            Split index
+        n_splits : int
+            Total number of splits
+        boost_correction : bool
+            Whether boost correction was applied
+            
+        Returns
+        -------
+        Optional[Tuple[float, float, float]]
+            Tuple of (mean_value, min_value, max_value), or None if file not found
+        """
+        try:
+            filepath = self.get_splits_filepath(
+                version, galaxy_type, source_survey, lens_bin, z_bins,
+                statistic, split_by, split, n_splits, boost_correction,
+                file_type="split_value"
+            )
+            
+            if filepath.exists():
+                values = np.loadtxt(str(filepath))
+                # File format: [mean, min, max]
+                if len(values) >= 3:
+                    return (float(values[0]), float(values[1]), float(values[2]))
+                elif len(values) >= 1:
+                    # Fallback if only mean is stored
+                    return (float(values[0]), float(values[0]), float(values[0]))
+                else:
+                    self.logger.warning(f"Empty split value file: {filepath}")
+                    return None
+            else:
+                self.logger.warning(f"Split value file not found: {filepath}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error loading split value: {e}")
+            return None
+    
+    def load_reference_datavector(
+        self,
+        galaxy_type: str,
+        lens_bin: int,
+        reference_path: str = "/global/cfs/cdirs/desicollab/science/c3/DESI-Lensing/model_inputs_desiy3",
+        datavector_type: str = "abacus",
+        rp: Optional[np.ndarray] = None,
+        z_lens: Optional[float] = None,
+        config: Optional[Any] = None
+    ) -> Optional[np.ndarray]:
+        """
+        Load reference data vector for amplitude normalization.
+        
+        Reference data vectors are theory predictions used to normalize
+        lensing amplitude measurements, enabling comparison across different
+        lens bins and scale cuts.
+        
+        Parameters
+        ----------
+        galaxy_type : str
+            Type of lens galaxies ('BGS_BRIGHT' or 'LRG')
+        lens_bin : int
+            Lens redshift bin index
+        reference_path : str
+            Path to reference data vector files
+        datavector_type : str
+            Type of reference data vector:
+            - 'default' / 'abacus': Abacus HOD model predictions
+            - 'buzzard': Buzzard simulation predictions
+            - 'darkemu': Dark emulator predictions (requires rp, z_lens)
+            - 'alexie_hod': HOD model from Saito et al. 2016
+            - 'tabcorr': Tabulated correlation predictions
+        rp : Optional[np.ndarray]
+            Projected radii (Mpc/h) for darkemu/alexie_hod
+        z_lens : Optional[float]
+            Lens redshift for darkemu/alexie_hod
+        config : Optional[Any]
+            Config object for Mmin lookup (darkemu only)
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            Reference data vector, or None if file not found
+        """
+        try:
+            # Map galaxy type to file naming convention
+            galaxy_short = galaxy_type[:3].upper()  # 'BGS' or 'LRG'
+            
+            if datavector_type in ["default", "abacus"]:
+                filepath = Path(reference_path) / "reference_datavectors" / "abacus" / f"ds_{galaxy_short}_l{lens_bin}.npy"
+                if filepath.exists():
+                    ref_dv = np.load(str(filepath))
+                    self.logger.info(f"Loaded reference datavector from {filepath} (shape: {ref_dv.shape})")
+                    return ref_dv
+                    
+            elif datavector_type == "buzzard":
+                filepath = Path(reference_path) / "reference_datavectors" / f"deltasigma_{galaxy_type}_l{lens_bin}_mean_datavector.npy"
+                if filepath.exists():
+                    ref_dv = np.load(str(filepath))
+                    self.logger.info(f"Loaded reference datavector from {filepath} (shape: {ref_dv.shape})")
+                    return ref_dv
+                    
+            elif datavector_type == "darkemu":
+                # Use dark_emulator to generate reference datavector
+                if rp is None or z_lens is None:
+                    self.logger.warning("darkemu requires rp and z_lens parameters")
+                    return None
+                return self._generate_darkemu_datavector(rp, z_lens, galaxy_type, lens_bin, config)
+                
+            elif datavector_type == "alexie_hod":
+                # Load HOD model from Saito et al. 2016
+                filepath = Path(reference_path) / "reference_datavectors" / "BOSS" / "hod_model_saito2016_mdpl2.txt"
+                if filepath.exists() and rp is not None and z_lens is not None:
+                    dat = np.loadtxt(str(filepath))
+                    # Convert units: rp is comoving, need to apply h and (1+z) factors
+                    h = 0.7
+                    rp_interp = dat[:, 0] * h / (1 + z_lens)
+                    ds_interp = dat[:, 1] / h
+                    from scipy.interpolate import interp1d
+                    interp_func = interp1d(rp_interp, ds_interp, fill_value=np.nan, bounds_error=False)
+                    ref_dv = interp_func(rp)
+                    self.logger.info(f"Loaded alexie_hod reference datavector from {filepath}")
+                    return ref_dv
+                    
+            elif datavector_type == "tabcorr":
+                filepath = Path(reference_path) / f"lensing_measurements/hod_params/{galaxy_type}_{lens_bin}_ds.npy"
+                if filepath.exists():
+                    ref_dv = np.load(str(filepath))
+                    self.logger.info(f"Loaded tabcorr reference datavector from {filepath}")
+                    return ref_dv
+            else:
+                self.logger.warning(f"Unknown datavector_type: {datavector_type}. "
+                                   f"Valid options: default, abacus, buzzard, darkemu, alexie_hod, tabcorr")
+                return None
+            
+            self.logger.warning(f"Reference datavector not found for type {datavector_type}")
+            return None
+                
+        except Exception as e:
+            self.logger.error(f"Error loading reference datavector: {e}")
+            return None
+    
+    def _generate_darkemu_datavector(
+        self,
+        rp: np.ndarray,
+        z_lens: float,
+        galaxy_type: str,
+        lens_bin: int,
+        config: Optional[Any] = None,
+        Mmin: Optional[float] = None
+    ) -> Optional[np.ndarray]:
+        """
+        Generate reference datavector using dark_emulator.
+        
+        Parameters
+        ----------
+        rp : np.ndarray
+            Projected radii (Mpc/h)
+        z_lens : float
+            Lens redshift
+        galaxy_type : str
+            Galaxy type for Mmin lookup
+        lens_bin : int
+            Lens bin for Mmin lookup
+        config : Optional[Any]
+            Config object for Mmin lookup
+        Mmin : Optional[float]
+            Minimum halo mass (if not provided, use config or default)
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            DeltaSigma reference datavector
+        """
+        try:
+            import sys
+            sys.path.insert(0, "/global/homes/s/sven/code/dark_emulator_public/")
+            from dark_emulator import darkemu
+        except ImportError:
+            self.logger.warning("dark_emulator not available for reference datavector generation")
+            return None
+        
+        # Cosmology parameters (Planck18)
+        omb = 0.0224
+        omc = 0.120
+        omde = 0.6847
+        lnAs = 3.045
+        ns = 0.965
+        w = -1.
+        
+        cparam = np.array([omb, omc, omde, lnAs, ns, w])
+        
+        emu = darkemu.base_class()
+        emu.set_cosmology(cparam)
+        
+        # Calculate h
+        omnu = 0.00064
+        omm = 1 - omde
+        h = np.sqrt((omb + omc + omnu) / omm)
+        
+        # Get Mmin
+        if Mmin is None:
+            Mmin = 5e12  # Default value
+            # Could load from config if available
+        
+        dsigma = emu.get_DeltaSigma_massthreshold(rp / h, Mmin, z_lens)
+        self.logger.info(f"Generated darkemu reference datavector (Mmin={Mmin:.2e}, z={z_lens})")
+        return dsigma
